@@ -1,0 +1,4 @@
+Pillow>=10
+PyYAML>=6.0
+requests>=2.32
+dxcam>=0.0.5; platform_system == "Windows"

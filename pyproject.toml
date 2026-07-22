@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ollama-hud"
+version = "0.1.0"
+description = "Click-through Windows HUD that asks a local Ollama vision model about the current screen."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "Pillow>=10",
+  "PyYAML>=6.0",
+  "requests>=2.32",
+  "dxcam>=0.0.5; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8"]
+
+[project.scripts]
+ollama-hud = "ollama_hud.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

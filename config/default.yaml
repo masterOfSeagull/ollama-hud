@@ -1,0 +1,23 @@
+host: http://127.0.0.1:11434
+model: huihui_ai/qwen3-vl-abliterated:8b-instruct
+trigger_shortcut: Alt+1
+exit_shortcut: Esc
+clear_shortcut: Alt+2
+screenshot_max_edge: 1280
+timeout_seconds: 120
+memory_qa_pairs: 3
+keep_alive: 30m
+think: true
+instruction: >-
+  Answer in one short sentence. No chain of thought. Give the best
+  direction/action only.
+query: >-
+  In this RPG dungeon screenshot, identify the entrance, portal, exit, or door I
+  should use next. Which direction or action should I take?
+options:
+  temperature: 0.2
+  top_p: 0.8
+  num_predict: 2048
+  num_ctx: 32768
+  repeat_penalty: 1.1
+  repeat_last_n: 64
