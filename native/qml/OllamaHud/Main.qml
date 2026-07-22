@@ -175,6 +175,7 @@ ApplicationWindow {
 
                                 RuntimeCard {
                                     Layout.fillWidth: true
+                                    expanded: true
                                     title: "Runtime"
                                     body: appController.visualAnswer.length > 0 ? appController.visualAnswer : "Ready for the next trigger."
                                     foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Clear " + appController.settingsStore.clearShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
@@ -258,16 +259,18 @@ ApplicationWindow {
         property string body
         property string foot
         property color stateColor: Colors.secondry
+        property bool expanded: false
 
         radius: 8
         color: Colors.backgroundActivated
         border.width: 1
         border.color: Colors.borderActivated
-        implicitHeight: 156
+        implicitHeight: expanded ? cardContent.implicitHeight + 36 : 156
         Layout.preferredHeight: implicitHeight
         Layout.minimumHeight: implicitHeight
 
         ColumnLayout {
+            id: cardContent
             anchors.fill: parent
             anchors.margins: 18
             spacing: 8
@@ -289,14 +292,14 @@ ApplicationWindow {
             }
             Text {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.fillHeight: !expanded
                 text: body
                 color: Colors.textPrimary
                 font.pixelSize: Typography.h4
                 font.family: FontSystem.getContentFontBold.name
                 wrapMode: Text.WordWrap
-                elide: Text.ElideRight
-                maximumLineCount: 3
+                elide: expanded ? Text.ElideNone : Text.ElideRight
+                maximumLineCount: expanded ? 0 : 3
             }
             Text {
                 Layout.fillWidth: true
@@ -346,9 +349,9 @@ ApplicationWindow {
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.margins: 18
-                        columns: 2
-                        rowSpacing: 12
-                        columnSpacing: 14
+                    columns: 2
+                    rowSpacing: 12
+                    columnSpacing: 14
 
                         FieldLabel {
                             text: "Instruction"
@@ -418,7 +421,7 @@ ApplicationWindow {
 
                     FieldLabel { text: "Host"; visible: !promptOnly }
                     Controls.TextField {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 360
                         visible: !promptOnly
                         text: appController.settingsStore.host
                         onEditingFinished: appController.settingsStore.host = text
@@ -438,7 +441,7 @@ ApplicationWindow {
 
                     FieldLabel { text: "Trigger"; visible: !promptOnly }
                     Controls.TextField {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 220
                         visible: !promptOnly
                         text: appController.settingsStore.triggerShortcut
                         onEditingFinished: appController.settingsStore.triggerShortcut = text
@@ -446,7 +449,7 @@ ApplicationWindow {
 
                     FieldLabel { text: "Clear"; visible: !promptOnly }
                     Controls.TextField {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 220
                         visible: !promptOnly
                         text: appController.settingsStore.clearShortcut
                         onEditingFinished: appController.settingsStore.clearShortcut = text
@@ -454,38 +457,50 @@ ApplicationWindow {
 
                     FieldLabel { text: "Exit"; visible: !promptOnly }
                     Controls.TextField {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: 220
                         visible: !promptOnly
                         text: appController.settingsStore.exitShortcut
                         onEditingFinished: appController.settingsStore.exitShortcut = text
                     }
 
                     FieldLabel { text: "Screenshot max edge"; visible: !promptOnly }
-                    Controls.SpinBox {
-                        Layout.fillWidth: true
+                    Controls.TextField {
+                        Layout.preferredWidth: 140
                         visible: !promptOnly
-                        from: 64
-                        to: 4096
-                        value: appController.settingsStore.screenshotMaxEdge
-                        onValueModified: appController.settingsStore.screenshotMaxEdge = value
+                        text: appController.settingsStore.screenshotMaxEdge
+                        validator: IntValidator { bottom: 64; top: 4096 }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        onEditingFinished: appController.settingsStore.screenshotMaxEdge = parseInt(text)
                     }
 
                     FieldLabel { text: "Memory pairs"; visible: !promptOnly }
-                    Controls.SpinBox {
-                        Layout.fillWidth: true
+                    Controls.TextField {
+                        Layout.preferredWidth: 140
                         visible: !promptOnly
-                        from: 0
-                        to: 20
-                        value: appController.settingsStore.memoryQaPairs
-                        onValueModified: appController.settingsStore.memoryQaPairs = value
+                        text: appController.settingsStore.memoryQaPairs
+                        validator: IntValidator { bottom: 0; top: 20 }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        onEditingFinished: appController.settingsStore.memoryQaPairs = parseInt(text)
                     }
 
                     FieldLabel { text: "Keep alive"; visible: !promptOnly }
-                    Controls.TextField {
-                        Layout.fillWidth: true
+                    RowLayout {
+                        Layout.preferredWidth: 220
                         visible: !promptOnly
-                        text: appController.settingsStore.keepAlive
-                        onEditingFinished: appController.settingsStore.keepAlive = text
+                        spacing: 8
+
+                        Controls.TextField {
+                            Layout.preferredWidth: 100
+                            text: appController.settingsStore.keepAliveMinutes
+                            validator: IntValidator { bottom: 0; top: 1000000 }
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            onEditingFinished: appController.settingsStore.keepAliveMinutes = text
+                        }
+                        Text {
+                            text: "min"
+                            color: Colors.textMuted
+                            font.pixelSize: Typography.t3
+                        }
                     }
 
                     FieldLabel { text: "Think"; visible: !promptOnly }
@@ -495,33 +510,49 @@ ApplicationWindow {
                         onToggled: appController.settingsStore.think = checked
                     }
 
-                    FieldLabel { text: "Options"; visible: !promptOnly }
-                    Basic.ScrollView {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 180
+                    FieldLabel { text: "Context tokens"; visible: !promptOnly }
+                    OptionField {
                         visible: !promptOnly
-                        clip: true
+                        text: appController.settingsStore.numCtx
+                        integerOnly: true
+                        onEditingFinished: appController.settingsStore.numCtx = text
+                    }
 
-                        background: Rectangle {
-                            radius: 8
-                            color: Colors.backgroundItemActivated
-                            border.width: 1
-                            border.color: optionsArea.activeFocus ? Colors.borderFocused : Colors.borderActivated
-                        }
+                    FieldLabel { text: "Max output tokens"; visible: !promptOnly }
+                    OptionField {
+                        visible: !promptOnly
+                        text: appController.settingsStore.numPredict
+                        integerOnly: true
+                        onEditingFinished: appController.settingsStore.numPredict = text
+                    }
 
-                        Basic.TextArea {
-                            id: optionsArea
-                            text: appController.settingsStore.optionsText
-                            wrapMode: TextArea.Wrap
-                            color: Colors.textPrimary
-                            selectedTextColor: Colors.textPrimary
-                            selectionColor: Colors.secondryBack
-                            padding: 12
-                            font.family: "Consolas"
-                            font.pixelSize: Typography.t2
-                            background: null
-                            onActiveFocusChanged: if (!activeFocus) appController.settingsStore.optionsText = text
-                        }
+                    FieldLabel { text: "Repeat last N"; visible: !promptOnly }
+                    OptionField {
+                        visible: !promptOnly
+                        text: appController.settingsStore.repeatLastN
+                        integerOnly: true
+                        onEditingFinished: appController.settingsStore.repeatLastN = text
+                    }
+
+                    FieldLabel { text: "Repeat penalty"; visible: !promptOnly }
+                    OptionField {
+                        visible: !promptOnly
+                        text: appController.settingsStore.repeatPenalty
+                        onEditingFinished: appController.settingsStore.repeatPenalty = text
+                    }
+
+                    FieldLabel { text: "Temperature"; visible: !promptOnly }
+                    OptionField {
+                        visible: !promptOnly
+                        text: appController.settingsStore.temperature
+                        onEditingFinished: appController.settingsStore.temperature = text
+                    }
+
+                    FieldLabel { text: "Top P"; visible: !promptOnly }
+                    OptionField {
+                        visible: !promptOnly
+                        text: appController.settingsStore.topP
+                        onEditingFinished: appController.settingsStore.topP = text
                     }
                     }
                 }
@@ -546,6 +577,27 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
+
+    component OptionField: Controls.TextField {
+        property bool integerOnly: false
+
+        Layout.preferredWidth: 140
+        validator: integerOnly ? optionIntValidator : optionDoubleValidator
+        inputMethodHints: Qt.ImhFormattedNumbersOnly
+
+        IntValidator {
+            id: optionIntValidator
+            bottom: 0
+            top: 1000000
+        }
+        DoubleValidator {
+            id: optionDoubleValidator
+            bottom: 0
+            top: 1000000
+            decimals: 4
+            notation: DoubleValidator.StandardNotation
         }
     }
 }

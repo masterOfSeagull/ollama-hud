@@ -142,6 +142,7 @@ if(OLLAMA_HUD_BUILD_TESTS)
     )
     add_test(NAME ollama_hud_native_tests COMMAND ollama_hud_native_tests)
     set_tests_properties(ollama_hud_native_tests PROPERTIES
-        ENVIRONMENT "PATH=$<TARGET_FILE_DIR:ollama_hud_native_tests>;${QT_BIN_DIR};$ENV{PATH}"
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:ollama_hud_native_tests>;PATH=path_list_prepend:${QT_BIN_DIR}"
     )
 endif()

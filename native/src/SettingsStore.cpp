@@ -187,6 +187,22 @@ double doubleValue(const QVariantMap &data, const QString &key, double fallback)
     const double value = data.value(key).toDouble(&ok);
     return ok ? value : fallback;
 }
+
+QString keepAliveMinutesText(const QString &value)
+{
+    const QString text = value.trimmed().toLower();
+    bool ok = false;
+    if (text.endsWith('m')) {
+        const int minutes = text.left(text.size() - 1).toInt(&ok);
+        return ok ? QString::number(minutes) : QStringLiteral("30");
+    }
+    if (text.endsWith('h')) {
+        const double hours = text.left(text.size() - 1).toDouble(&ok);
+        return ok ? QString::number(qRound(hours * 60.0)) : QStringLiteral("30");
+    }
+    const int minutes = text.toInt(&ok);
+    return ok ? QString::number(minutes) : QStringLiteral("30");
+}
 }
 
 QString HudSettings::normalizedHost() const
@@ -393,6 +409,12 @@ QString SettingsStore::query() const { return m_settings.query; }
 void SettingsStore::setQuery(const QString &value) { m_settings.query = value; emit settingsChanged(); }
 QString SettingsStore::keepAlive() const { return m_settings.keepAlive; }
 void SettingsStore::setKeepAlive(const QString &value) { m_settings.keepAlive = value; emit settingsChanged(); }
+QString SettingsStore::keepAliveMinutes() const { return keepAliveMinutesText(m_settings.keepAlive); }
+void SettingsStore::setKeepAliveMinutes(const QString &value)
+{
+    m_settings.keepAlive = keepAliveMinutesText(value) + QStringLiteral("m");
+    emit settingsChanged();
+}
 bool SettingsStore::think() const { return m_settings.think; }
 void SettingsStore::setThink(bool value) { m_settings.think = value; emit settingsChanged(); }
 QString SettingsStore::optionsText() const { return optionsToText(m_settings.options); }
@@ -401,6 +423,18 @@ void SettingsStore::setOptionsText(const QString &value)
     m_settings.options = optionsFromText(value, m_settings.options);
     emit settingsChanged();
 }
+QString SettingsStore::numCtx() const { return optionText(QStringLiteral("num_ctx")); }
+void SettingsStore::setNumCtx(const QString &value) { setOptionText(QStringLiteral("num_ctx"), value); }
+QString SettingsStore::numPredict() const { return optionText(QStringLiteral("num_predict")); }
+void SettingsStore::setNumPredict(const QString &value) { setOptionText(QStringLiteral("num_predict"), value); }
+QString SettingsStore::repeatLastN() const { return optionText(QStringLiteral("repeat_last_n")); }
+void SettingsStore::setRepeatLastN(const QString &value) { setOptionText(QStringLiteral("repeat_last_n"), value); }
+QString SettingsStore::repeatPenalty() const { return optionText(QStringLiteral("repeat_penalty")); }
+void SettingsStore::setRepeatPenalty(const QString &value) { setOptionText(QStringLiteral("repeat_penalty"), value); }
+QString SettingsStore::temperature() const { return optionText(QStringLiteral("temperature")); }
+void SettingsStore::setTemperature(const QString &value) { setOptionText(QStringLiteral("temperature"), value); }
+QString SettingsStore::topP() const { return optionText(QStringLiteral("top_p")); }
+void SettingsStore::setTopP(const QString &value) { setOptionText(QStringLiteral("top_p"), value); }
 QString SettingsStore::lastError() const { return m_lastError; }
 
 void SettingsStore::setLastError(const QString &message)
@@ -410,4 +444,15 @@ void SettingsStore::setLastError(const QString &message)
     }
     m_lastError = message;
     emit lastErrorChanged();
+}
+
+QString SettingsStore::optionText(const QString &key) const
+{
+    return m_settings.options.value(key).toString();
+}
+
+void SettingsStore::setOptionText(const QString &key, const QString &value)
+{
+    m_settings.options.insert(key, parseScalar(value));
+    emit settingsChanged();
 }

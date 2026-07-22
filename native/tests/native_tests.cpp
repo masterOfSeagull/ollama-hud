@@ -58,6 +58,17 @@ options:
     QCOMPARE(settings.memoryQaPairs, 2);
     QCOMPARE(settings.think, false);
     QCOMPARE(settings.options.value("num_ctx").toInt(), 4096);
+
+    SettingsStore store;
+    store.setSettings(settings);
+    QCOMPARE(store.keepAliveMinutes(), QString("1"));
+    store.setKeepAliveMinutes("10");
+    QCOMPARE(store.settings().keepAlive, QString("10m"));
+    store.setNumCtx("8192");
+    QCOMPARE(store.settings().options.value("num_ctx").toInt(), 8192);
+    store.setTopP("0.75");
+    QCOMPARE(store.settings().options.value("top_p").toDouble(), 0.75);
+
     HudSettings invalid;
     invalid.host = "";
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, SettingsStore::validate(invalid));

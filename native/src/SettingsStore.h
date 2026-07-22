@@ -43,8 +43,15 @@ class SettingsStore : public QObject
     Q_PROPERTY(QString instruction READ instruction WRITE setInstruction NOTIFY settingsChanged)
     Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY settingsChanged)
     Q_PROPERTY(QString keepAlive READ keepAlive WRITE setKeepAlive NOTIFY settingsChanged)
+    Q_PROPERTY(QString keepAliveMinutes READ keepAliveMinutes WRITE setKeepAliveMinutes NOTIFY settingsChanged)
     Q_PROPERTY(bool think READ think WRITE setThink NOTIFY settingsChanged)
     Q_PROPERTY(QString optionsText READ optionsText WRITE setOptionsText NOTIFY settingsChanged)
+    Q_PROPERTY(QString numCtx READ numCtx WRITE setNumCtx NOTIFY settingsChanged)
+    Q_PROPERTY(QString numPredict READ numPredict WRITE setNumPredict NOTIFY settingsChanged)
+    Q_PROPERTY(QString repeatLastN READ repeatLastN WRITE setRepeatLastN NOTIFY settingsChanged)
+    Q_PROPERTY(QString repeatPenalty READ repeatPenalty WRITE setRepeatPenalty NOTIFY settingsChanged)
+    Q_PROPERTY(QString temperature READ temperature WRITE setTemperature NOTIFY settingsChanged)
+    Q_PROPERTY(QString topP READ topP WRITE setTopP NOTIFY settingsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 
 public:
@@ -87,10 +94,24 @@ public:
     void setQuery(const QString &value);
     QString keepAlive() const;
     void setKeepAlive(const QString &value);
+    QString keepAliveMinutes() const;
+    void setKeepAliveMinutes(const QString &value);
     bool think() const;
     void setThink(bool value);
     QString optionsText() const;
     void setOptionsText(const QString &value);
+    QString numCtx() const;
+    void setNumCtx(const QString &value);
+    QString numPredict() const;
+    void setNumPredict(const QString &value);
+    QString repeatLastN() const;
+    void setRepeatLastN(const QString &value);
+    QString repeatPenalty() const;
+    void setRepeatPenalty(const QString &value);
+    QString temperature() const;
+    void setTemperature(const QString &value);
+    QString topP() const;
+    void setTopP(const QString &value);
     QString lastError() const;
 
 signals:
@@ -99,6 +120,8 @@ signals:
 
 private:
     void setLastError(const QString &message);
+    QString optionText(const QString &key) const;
+    void setOptionText(const QString &key, const QString &value);
     HudSettings m_settings;
     QString m_lastError;
 };
