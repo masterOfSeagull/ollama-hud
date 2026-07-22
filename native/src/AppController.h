@@ -5,6 +5,7 @@
 #include "Shortcut.h"
 
 #include <QFutureWatcher>
+#include <QImage>
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
@@ -17,6 +18,14 @@ struct RuntimeSnapshot
     bool active = false;
     QString captureId;
     bool isError = false;
+};
+
+struct CaptureRequestResult
+{
+    RuntimeSnapshot snapshot;
+    QString answer;
+    QString memoryImageB64;
+    HudSettings settings;
 };
 
 class AppController : public QObject
@@ -57,13 +66,14 @@ signals:
     void transientMessage(const QString &message);
 
 private:
-    RuntimeSnapshot runCaptureRequest();
+    CaptureRequestResult runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories);
     void setSnapshot(const RuntimeSnapshot &snapshot);
     void runAsyncRequest();
+    void captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories);
     void ensureOverlay();
     void closeOverlay();
     void pollHotkeys();
-    void rememberAnswer(const QString &answer, const QImage &image);
+    void rememberAnswer(const QString &answer, const QString &imageB64, const HudSettings &settings);
     QString shortError(const std::exception &error) const;
 
     SettingsStore m_settingsStore;
@@ -72,7 +82,7 @@ private:
     QList<ChatMemory> m_memories;
     QTimer m_hotkeyTimer;
     QPointer<QObject> m_overlay;
-    QFutureWatcher<RuntimeSnapshot> m_requestWatcher;
+    QFutureWatcher<CaptureRequestResult> m_requestWatcher;
     bool m_hudRunning = false;
     bool m_triggerArmed = true;
     bool m_clearArmed = true;

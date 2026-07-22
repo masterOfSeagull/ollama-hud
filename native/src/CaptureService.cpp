@@ -1,16 +1,22 @@
 #include "CaptureService.h"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QGuiApplication>
 #include <QPixmap>
 #include <QScreen>
+#include <QThread>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 QImage CaptureService::capturePrimaryMonitor()
 {
+    QCoreApplication *application = QGuiApplication::instance();
+    if (!application || QThread::currentThread() != application->thread()) {
+        throw std::runtime_error("Primary monitor capture must run on the Qt GUI thread.");
+    }
     QScreen *screen = QGuiApplication::primaryScreen();
     if (!screen) {
         throw std::runtime_error("Could not open primary monitor.");

@@ -54,8 +54,12 @@ AppController::AppController(QObject *parent)
     m_snapshot.message = QStringLiteral("Ready - press %1").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
     connect(&m_hotkeyTimer, &QTimer::timeout, this, &AppController::pollHotkeys);
     m_hotkeyTimer.setInterval(30);
-    connect(&m_requestWatcher, &QFutureWatcher<RuntimeSnapshot>::finished, this, [this] {
-        setSnapshot(m_requestWatcher.result());
+    connect(&m_requestWatcher, &QFutureWatcher<CaptureRequestResult>::finished, this, [this] {
+        const CaptureRequestResult result = m_requestWatcher.result();
+        if (result.snapshot.state == "ANSWER") {
+            rememberAnswer(result.answer, result.memoryImageB64, result.settings);
+        }
+        setSnapshot(result.snapshot);
     });
 }
 
@@ -143,16 +147,12 @@ bool AppController::saveSettings()
     return false;
 }
 
-RuntimeSnapshot AppController::runCaptureRequest()
+CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories)
 {
-    const HudSettings settings = m_settingsStore.settings();
-    QList<ChatMemory> memories = m_memories;
     QString retry = "none";
     QString thinking;
     QString captureId;
-    QImage image;
     try {
-        image = CaptureService::capturePrimaryMonitor();
         captureId = CaptureService::imageFingerprint(image);
         QString initial = CaptureService::encodeJpegBase64(image, settings.screenshotMaxEdge, 85);
         OllamaReply reply;
@@ -176,13 +176,13 @@ RuntimeSnapshot AppController::runCaptureRequest()
             }
         }
         thinking = reply.thinking;
-        rememberAnswer(reply.answer, image);
+        const QString memoryImageB64 = settings.memoryQaPairs > 0 ? CaptureService::encodeJpegBase64(image, 768, 70) : QString();
         ChatLogService::write({captureId, settings.query, memories, reply.answer, {}, retry, thinking}, settings);
-        return {"ANSWER", reply.answer, false, captureId, false};
+        return {{"ANSWER", reply.answer, false, captureId, false}, reply.answer, memoryImageB64, settings};
     } catch (const std::exception &error) {
         const QString message = shortError(error);
         ChatLogService::write({captureId, settings.query, memories, {}, message, retry, thinking}, settings);
-        return {"ERROR", message, false, captureId, true};
+        return {{"ERROR", message, false, captureId, true}, {}, {}, settings};
     }
 }
 
@@ -195,8 +195,40 @@ void AppController::setSnapshot(const RuntimeSnapshot &snapshot)
 void AppController::runAsyncRequest()
 {
     setSnapshot({"CAPTURING", "Capturing primary monitor.", true, m_snapshot.captureId, false});
-    m_requestWatcher.setFuture(QtConcurrent::run([this] {
-        return runCaptureRequest();
+    const HudSettings settings = m_settingsStore.settings();
+    const QList<ChatMemory> memories = m_memories;
+
+    QQuickWindow *overlayWindow = qobject_cast<QQuickWindow *>(m_overlay.data());
+    const bool restoreOverlay = overlayWindow && overlayWindow->isVisible();
+    if (restoreOverlay) {
+        overlayWindow->hide();
+    }
+
+    QTimer::singleShot(80, this, [this, settings, memories, restoreOverlay] {
+        captureOnGuiThread(settings, memories);
+        if (restoreOverlay && m_overlay) {
+            if (auto *overlayWindow = qobject_cast<QQuickWindow *>(m_overlay.data())) {
+                overlayWindow->show();
+                overlayWindow->raise();
+                applyClickThrough(overlayWindow);
+            }
+        }
+    });
+}
+
+void AppController::captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories)
+{
+    QImage image;
+    try {
+        image = CaptureService::capturePrimaryMonitor();
+    } catch (const std::exception &error) {
+        setSnapshot({"ERROR", shortError(error), false, m_snapshot.captureId, true});
+        return;
+    }
+
+    setSnapshot({"ASKING", "Sending screenshot to Ollama.", true, m_snapshot.captureId, false});
+    m_requestWatcher.setFuture(QtConcurrent::run([this, image, settings, memories] {
+        return runCaptureRequest(image, settings, memories);
     }));
 }
 
@@ -257,14 +289,13 @@ void AppController::pollHotkeys()
     }
 }
 
-void AppController::rememberAnswer(const QString &answer, const QImage &image)
+void AppController::rememberAnswer(const QString &answer, const QString &imageB64, const HudSettings &settings)
 {
-    const HudSettings settings = m_settingsStore.settings();
     if (settings.memoryQaPairs <= 0) {
         m_memories.clear();
         return;
     }
-    const ChatMemory memory{settings.query, answer, CaptureService::encodeJpegBase64(image, 768, 70)};
+    const ChatMemory memory{settings.query, answer, imageB64};
     if (!m_memories.isEmpty() && m_memories.last().question == memory.question && m_memories.last().answer == memory.answer) {
         return;
     }
