@@ -162,16 +162,26 @@ T.ComboBox {
         Shadow {}
     }
 
-    contentItem: Text {
+    contentItem: TextInput {
         leftPadding: 8
         rightPadding: 22
-        text: (control.currentIndex >= 0)
-              ? control.modelTextAt(control.currentIndex)
-              : ""
+        text: control.editable
+              ? control.editText
+              : ((control.currentIndex >= 0) ? control.modelTextAt(control.currentIndex) : "")
+        enabled: control.editable && control.enabled
+        opacity: 1.0
+        readOnly: !control.editable
+        selectByMouse: control.editable
+        selectedTextColor: Colors.textPrimary
+        selectionColor: Colors.secondryBack
         color: control.enabled ? Colors.textPrimary : Colors.textMuted
         font.pixelSize: Typography.t2
         verticalAlignment: Text.AlignVCenter
-        elide: Text.ElideRight
+        clip: true
+        autoScroll: control.editable
+
+        onTextEdited: if (control.editable) control.editText = text
+        onAccepted: if (control.editable) control.accepted()
     }
 
     indicator: Item {
@@ -363,6 +373,8 @@ T.ComboBox {
                     onClicked: {
                         if (sourceIndex >= 0) {
                             control.currentIndex = sourceIndex
+                            if (control.editable)
+                                control.editText = control.modelTextAt(sourceIndex)
                             control.activated(sourceIndex)
                             popup.close()
                         }
