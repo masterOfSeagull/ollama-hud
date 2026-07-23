@@ -37,6 +37,7 @@ class AppController : public QObject
     Q_PROPERTY(QString visualAnswer READ visualAnswer NOTIFY snapshotChanged)
     Q_PROPERTY(QString captureId READ captureId NOTIFY snapshotChanged)
     Q_PROPERTY(bool active READ active NOTIFY snapshotChanged)
+    Q_PROPERTY(bool hudCollapsed READ hudCollapsed NOTIFY hudCollapsedChanged)
     Q_PROPERTY(bool hudRunning READ hudRunning NOTIFY hudRunningChanged)
     Q_PROPERTY(bool error READ error NOTIFY snapshotChanged)
 
@@ -50,6 +51,7 @@ public:
     QString visualAnswer() const;
     QString captureId() const;
     bool active() const;
+    bool hudCollapsed() const;
     bool hudRunning() const;
     bool error() const;
 
@@ -58,10 +60,12 @@ public:
     Q_INVOKABLE void captureOnce();
     Q_INVOKABLE void testOllama();
     Q_INVOKABLE void clearVisualAnswer();
+    Q_INVOKABLE void toggleHudCollapsed();
     Q_INVOKABLE bool saveSettings();
 
 signals:
     void snapshotChanged();
+    void hudCollapsedChanged();
     void hudRunningChanged();
     void transientMessage(const QString &message);
 
@@ -84,6 +88,7 @@ private:
     QPointer<QObject> m_overlay;
     QFutureWatcher<CaptureRequestResult> m_requestWatcher;
     bool m_hudRunning = false;
+    bool m_hudCollapsed = false;
     bool m_triggerArmed = true;
     bool m_clearArmed = true;
 };

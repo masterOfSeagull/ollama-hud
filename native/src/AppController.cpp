@@ -75,6 +75,7 @@ QString AppController::message() const { return m_snapshot.message; }
 QString AppController::visualAnswer() const { return m_snapshot.state == "ANSWER" ? m_snapshot.message : QString(); }
 QString AppController::captureId() const { return m_snapshot.captureId; }
 bool AppController::active() const { return m_snapshot.active; }
+bool AppController::hudCollapsed() const { return m_hudCollapsed; }
 bool AppController::hudRunning() const { return m_hudRunning; }
 bool AppController::error() const { return m_snapshot.isError; }
 
@@ -138,6 +139,12 @@ void AppController::clearVisualAnswer()
     setSnapshot({"READY", ready, false, m_snapshot.captureId, false});
 }
 
+void AppController::toggleHudCollapsed()
+{
+    m_hudCollapsed = !m_hudCollapsed;
+    emit hudCollapsedChanged();
+}
+
 bool AppController::saveSettings()
 {
     if (m_settingsStore.save()) {
@@ -177,7 +184,22 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
         }
         thinking = reply.thinking;
         const QString memoryImageB64 = settings.memoryQaPairs > 0 ? CaptureService::encodeJpegBase64(image, 768, 70) : QString();
-        ChatLogService::write({captureId, settings.query, memories, reply.answer, {}, retry, thinking}, settings);
+        ChatLogService::write({
+            captureId,
+            settings.query,
+            memories,
+            reply.answer,
+            {},
+            retry,
+            thinking,
+            reply.doneReason,
+            reply.promptEvalCount,
+            reply.evalCount,
+            reply.totalDurationNs,
+            reply.loadDurationNs,
+            reply.promptEvalDurationNs,
+            reply.evalDurationNs,
+        }, settings);
         return {{"ANSWER", reply.answer, false, captureId, false}, reply.answer, memoryImageB64, settings};
     } catch (const std::exception &error) {
         const QString message = shortError(error);
@@ -278,7 +300,7 @@ void AppController::pollHotkeys()
         }
         const KeyboardShortcut clearShortcut = parseShortcut(settings.clearShortcut);
         if (!m_snapshot.active && latchedPress(clearShortcut, m_clearArmed)) {
-            clearVisualAnswer();
+            toggleHudCollapsed();
         }
         const KeyboardShortcut triggerShortcut = parseShortcut(settings.triggerShortcut);
         if (!m_snapshot.active && latchedPress(triggerShortcut, m_triggerArmed)) {

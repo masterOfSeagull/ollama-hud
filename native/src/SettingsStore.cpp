@@ -272,6 +272,9 @@ HudSettings SettingsStore::loadFromPath(const QString &path)
     settings.timeoutSeconds = std::max(1.0, doubleValue(data, "timeout_seconds", settings.timeoutSeconds));
     settings.memoryQaPairs = std::max(0, intValue(data, "memory_qa_pairs", settings.memoryQaPairs));
     settings.instruction = stringValue(data, "instruction", settings.instruction);
+    if (data.contains("screenshot_context")) {
+        settings.screenshotContext = data.value("screenshot_context").toString();
+    }
     settings.query = stringValue(data, "query", settings.query);
     settings.keepAlive = stringValue(data, "keep_alive", settings.keepAlive);
     if (data.contains("think")) {
@@ -302,6 +305,7 @@ void SettingsStore::saveToPath(const HudSettings &settings, const QString &path)
     out << "timeout_seconds: " << settings.timeoutSeconds << "\n";
     out << "memory_qa_pairs: " << settings.memoryQaPairs << "\n";
     out << "instruction: " << quoteYaml(settings.instruction) << "\n";
+    out << "screenshot_context: " << quoteYaml(settings.screenshotContext) << "\n";
     out << "keep_alive: " << quoteYaml(settings.keepAlive) << "\n";
     out << "think: " << (settings.think ? "true" : "false") << "\n";
     out << "query: " << quoteYaml(settings.query) << "\n";
@@ -405,6 +409,8 @@ int SettingsStore::memoryQaPairs() const { return m_settings.memoryQaPairs; }
 void SettingsStore::setMemoryQaPairs(int value) { m_settings.memoryQaPairs = value; emit settingsChanged(); }
 QString SettingsStore::instruction() const { return m_settings.instruction; }
 void SettingsStore::setInstruction(const QString &value) { m_settings.instruction = value; emit settingsChanged(); }
+QString SettingsStore::screenshotContext() const { return m_settings.screenshotContext; }
+void SettingsStore::setScreenshotContext(const QString &value) { m_settings.screenshotContext = value; emit settingsChanged(); }
 QString SettingsStore::query() const { return m_settings.query; }
 void SettingsStore::setQuery(const QString &value) { m_settings.query = value; emit settingsChanged(); }
 QString SettingsStore::keepAlive() const { return m_settings.keepAlive; }

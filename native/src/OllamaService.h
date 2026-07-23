@@ -18,6 +18,13 @@ struct OllamaReply
 {
     QString answer;
     QString thinking;
+    QString doneReason;
+    qint64 promptEvalCount = -1;
+    qint64 evalCount = -1;
+    qint64 totalDurationNs = -1;
+    qint64 loadDurationNs = -1;
+    qint64 promptEvalDurationNs = -1;
+    qint64 evalDurationNs = -1;
 };
 
 class OllamaException : public std::runtime_error
@@ -42,6 +49,7 @@ public:
     static QJsonArray buildChatMessages(
         const QString &query,
         const QString &instruction,
+        const QString &screenshotContext,
         const QString &imageB64,
         const QList<ChatMemory> &memories,
         int maxMemories);
@@ -54,6 +62,7 @@ public:
     static QString buildMessagePreview(
         const QString &query,
         const QString &instruction,
+        const QString &screenshotContext,
         const QList<ChatMemory> &memories,
         int maxMemories);
     static bool isContextLimitError(const QString &message);

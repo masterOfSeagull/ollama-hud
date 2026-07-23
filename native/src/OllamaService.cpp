@@ -11,10 +11,6 @@
 #include <algorithm>
 
 namespace {
-constexpr auto ScreenshotContext =
-    "Prior screenshots and Q&A turns are stale context. Use the current screenshot as the "
-    "source of truth, and use prior turns only when the current screenshot supports them.";
-
 QString oneLine(const QString &text)
 {
     QStringList parts;
@@ -44,6 +40,38 @@ QString errorText(QNetworkReply *reply, const QByteArray &body)
     }
     const QString text = QString::fromUtf8(body).trimmed();
     return text.isEmpty() ? QStringLiteral("HTTP %1").arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()) : text;
+}
+
+qint64 responseInteger(const QJsonObject &data, const QString &key)
+{
+    const QJsonValue value = data.value(key);
+    return value.isDouble() ? static_cast<qint64>(value.toDouble()) : -1;
+}
+
+OllamaReply replyFromResponse(const QJsonObject &data, bool allowEmptyAnswer = false)
+{
+    const QJsonObject message = data.value("message").toObject();
+    if (message.isEmpty()) {
+        throw OllamaException("Ollama did not return a chat message.");
+    }
+    const QString thinking = oneLine(message.value("thinking").toString());
+    const QString answer = oneLine(message.value("content").toString());
+    if (answer.isEmpty()) {
+        if (!allowEmptyAnswer) {
+            throw OllamaException("Ollama returned an empty response.", 0, thinking);
+        }
+    }
+    return {
+        answer.isEmpty() ? QStringLiteral("OK") : answer,
+        thinking,
+        data.value("done_reason").toString(),
+        responseInteger(data, "prompt_eval_count"),
+        responseInteger(data, "eval_count"),
+        responseInteger(data, "total_duration"),
+        responseInteger(data, "load_duration"),
+        responseInteger(data, "prompt_eval_duration"),
+        responseInteger(data, "eval_duration"),
+    };
 }
 }
 
@@ -86,13 +114,16 @@ QList<ChatMemory> OllamaService::selectPromptMemories(const QList<ChatMemory> &m
 QJsonArray OllamaService::buildChatMessages(
     const QString &query,
     const QString &instruction,
+    const QString &screenshotContext,
     const QString &imageB64,
     const QList<ChatMemory> &memories,
     int maxMemories)
 {
     QJsonArray messages;
     messages.append(QJsonObject{{"role", "system"}, {"content", instruction}});
-    messages.append(QJsonObject{{"role", "system"}, {"content", ScreenshotContext}});
+    if (!screenshotContext.trimmed().isEmpty()) {
+        messages.append(QJsonObject{{"role", "system"}, {"content", screenshotContext}});
+    }
     for (const ChatMemory &memory : selectPromptMemories(memories, maxMemories)) {
         messages.append(QJsonObject{
             {"role", "user"},
@@ -122,7 +153,7 @@ QJsonObject OllamaService::buildChatPayload(
 
     return {
         {"model", settings.model},
-        {"messages", buildChatMessages(settings.query, settings.instruction, imageB64, memories, maxMemories < 0 ? settings.memoryQaPairs : maxMemories)},
+        {"messages", buildChatMessages(settings.query, settings.instruction, settings.screenshotContext, imageB64, memories, maxMemories < 0 ? settings.memoryQaPairs : maxMemories)},
         {"stream", false},
         {"think", settings.think},
         {"keep_alive", settings.keepAlive},
@@ -133,13 +164,14 @@ QJsonObject OllamaService::buildChatPayload(
 QString OllamaService::buildMessagePreview(
     const QString &query,
     const QString &instruction,
+    const QString &screenshotContext,
     const QList<ChatMemory> &memories,
     int maxMemories)
 {
-    QStringList parts = {
-        "system: " + instruction,
-        QStringLiteral("system: %1").arg(ScreenshotContext),
-    };
+    QStringList parts = {"system: " + instruction};
+    if (!screenshotContext.trimmed().isEmpty()) {
+        parts.append("system: " + screenshotContext);
+    }
     for (const ChatMemory &memory : selectPromptMemories(memories, maxMemories)) {
         parts.append("user: " + compact(memory.question) + " [screenshot omitted]");
         parts.append("assistant: " + compact(memory.answer));
@@ -204,16 +236,7 @@ QString OllamaService::checkServer(const HudSettings &settings)
 OllamaReply OllamaService::generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories)
 {
     const QJsonObject data = postChat(settings, buildChatPayload(settings, imageB64, memories));
-    const QJsonObject message = data.value("message").toObject();
-    if (message.isEmpty()) {
-        throw OllamaException("Ollama did not return a chat message.");
-    }
-    const QString thinking = oneLine(message.value("thinking").toString());
-    const QString answer = oneLine(message.value("content").toString());
-    if (answer.isEmpty()) {
-        throw OllamaException("Ollama returned an empty response.", 0, thinking);
-    }
-    return {answer, thinking};
+    return replyFromResponse(data);
 }
 
 OllamaReply OllamaService::testModel(const HudSettings &settings)
@@ -235,16 +258,7 @@ OllamaReply OllamaService::testModel(const HudSettings &settings)
         {"options", options},
     };
     const QJsonObject data = postChat(settings, payload);
-    const QJsonObject message = data.value("message").toObject();
-    if (message.isEmpty()) {
-        throw OllamaException("Ollama did not return a chat message.");
-    }
-    const QString thinking = oneLine(message.value("thinking").toString());
-    QString answer = oneLine(message.value("content").toString());
-    if (answer.isEmpty()) {
-        answer = "OK";
-    }
-    return {answer, thinking};
+    return replyFromResponse(data, true);
 }
 
 QJsonObject OllamaService::postChat(const HudSettings &settings, const QJsonObject &payload)

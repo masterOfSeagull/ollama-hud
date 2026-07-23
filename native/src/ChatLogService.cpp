@@ -18,6 +18,19 @@ QString oneLine(const QString &text)
     }
     return parts.join(' ').trimmed();
 }
+
+QString countText(qint64 count)
+{
+    return count >= 0 ? QString::number(count) : QStringLiteral("(not returned)");
+}
+
+QString durationText(qint64 nanoseconds)
+{
+    if (nanoseconds < 0) {
+        return QStringLiteral("(not returned)");
+    }
+    return QString::number(static_cast<double>(nanoseconds) / 1000000000.0, 'f', 3) + " s";
+}
 }
 
 void ChatLogService::write(const ChatLogEntry &entry, const HudSettings &settings, const QString &path)
@@ -44,6 +57,14 @@ void ChatLogService::write(const ChatLogEntry &entry, const HudSettings &setting
     out << "Q/A memory sent: " << sentMemories.size() << "\n";
     out << "Think: " << (settings.think ? "yes" : "no") << "\n";
     out << "Retry: " << entry.retry << "\n\n";
+    out << "Ollama completion:\n";
+    out << "Done reason: " << (entry.doneReason.isEmpty() ? "(not returned)" : entry.doneReason) << "\n";
+    out << "Prompt tokens: " << countText(entry.promptEvalCount) << "\n";
+    out << "Generated tokens: " << countText(entry.evalCount) << "\n";
+    out << "Total duration: " << durationText(entry.totalDurationNs) << "\n";
+    out << "Load duration: " << durationText(entry.loadDurationNs) << "\n";
+    out << "Prompt evaluation duration: " << durationText(entry.promptEvalDurationNs) << "\n";
+    out << "Generation duration: " << durationText(entry.evalDurationNs) << "\n\n";
     out << "Question:\n" << entry.question << "\n\n";
     out << "Included Memory:\n";
     if (sentMemories.isEmpty()) {
@@ -60,5 +81,5 @@ void ChatLogService::write(const ChatLogEntry &entry, const HudSettings &setting
         out << "\nError:\n" << entry.error << "\n";
     }
     out << "\nMessage Preview Sent:\n";
-    out << OllamaService::buildMessagePreview(entry.question, settings.instruction, sentMemories, settings.memoryQaPairs) << "\n\n";
+    out << OllamaService::buildMessagePreview(entry.question, settings.instruction, settings.screenshotContext, sentMemories, settings.memoryQaPairs) << "\n\n";
 }

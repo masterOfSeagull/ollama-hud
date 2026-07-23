@@ -12,6 +12,13 @@ struct ChatLogEntry
     QString error;
     QString retry = "none";
     QString thinking;
+    QString doneReason;
+    qint64 promptEvalCount = -1;
+    qint64 evalCount = -1;
+    qint64 totalDurationNs = -1;
+    qint64 loadDurationNs = -1;
+    qint64 promptEvalDurationNs = -1;
+    qint64 evalDurationNs = -1;
 };
 
 class ChatLogService

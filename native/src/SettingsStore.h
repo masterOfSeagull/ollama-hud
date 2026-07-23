@@ -14,6 +14,7 @@ struct HudSettings
     double timeoutSeconds = 120.0;
     int memoryQaPairs = 3;
     QString instruction = "Answer in one short sentence. No chain of thought. Give the best direction/action only.";
+    QString screenshotContext = "Prior screenshots and Q&A turns are stale context. Use the current screenshot as the source of truth, and use prior turns only when the current screenshot supports them.";
     QString query = "In this RPG dungeon screenshot, identify the entrance, portal, exit, or door I should use next. Which direction or action should I take?";
     QString keepAlive = "30m";
     bool think = true;
@@ -41,6 +42,7 @@ class SettingsStore : public QObject
     Q_PROPERTY(double timeoutSeconds READ timeoutSeconds WRITE setTimeoutSeconds NOTIFY settingsChanged)
     Q_PROPERTY(int memoryQaPairs READ memoryQaPairs WRITE setMemoryQaPairs NOTIFY settingsChanged)
     Q_PROPERTY(QString instruction READ instruction WRITE setInstruction NOTIFY settingsChanged)
+    Q_PROPERTY(QString screenshotContext READ screenshotContext WRITE setScreenshotContext NOTIFY settingsChanged)
     Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY settingsChanged)
     Q_PROPERTY(QString keepAlive READ keepAlive WRITE setKeepAlive NOTIFY settingsChanged)
     Q_PROPERTY(QString keepAliveMinutes READ keepAliveMinutes WRITE setKeepAliveMinutes NOTIFY settingsChanged)
@@ -90,6 +92,8 @@ public:
     void setMemoryQaPairs(int value);
     QString instruction() const;
     void setInstruction(const QString &value);
+    QString screenshotContext() const;
+    void setScreenshotContext(const QString &value);
     QString query() const;
     void setQuery(const QString &value);
     QString keepAlive() const;

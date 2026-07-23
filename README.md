@@ -45,7 +45,7 @@ python -m ollama_hud
 
 Use the `Model` field to choose an installed Ollama model, then use
 `Start HUD`, switch back to the game or desktop, and press `Alt+1`.
-Press `Alt+2` to clear the visible answer and wait for the next trigger.
+Press `Alt+2` to collapse the HUD while preserving its text; press it again to expand it.
 Press `Esc` to close the HUD. `Ctrl+`` is always an emergency HUD exit.
 
 `Q/A memory pairs` controls how many recent successful question/answer pairs

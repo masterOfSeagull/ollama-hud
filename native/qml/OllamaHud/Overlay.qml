@@ -9,7 +9,9 @@ Window {
     property var appController
 
     width: Math.min(620, Screen.width - 48)
-    height: Math.max(96, stateText.implicitHeight + messageText.implicitHeight + 40)
+    height: appController && appController.hudCollapsed
+        ? stateText.implicitHeight + 28
+        : Math.max(96, stateText.implicitHeight + messageText.implicitHeight + 40)
     x: 18
     y: 18
     visible: true
@@ -40,6 +42,7 @@ Window {
 
         Text {
             id: messageText
+            visible: !appController || !appController.hudCollapsed
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: stateText.bottom

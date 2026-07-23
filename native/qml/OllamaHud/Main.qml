@@ -178,7 +178,7 @@ ApplicationWindow {
                                     expanded: true
                                     title: "Runtime"
                                     body: appController.visualAnswer.length > 0 ? appController.visualAnswer : "Ready for the next trigger."
-                                    foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Clear " + appController.settingsStore.clearShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
+                                    foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Collapse " + appController.settingsStore.clearShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
                                     stateColor: appController.error ? Colors.error : (appController.active ? Colors.warning : Colors.success)
                                 }
 
@@ -243,8 +243,8 @@ ApplicationWindow {
                                     foot: "Screenshot payloads are omitted from the log."
                                 }
                                 Controls.Button {
-                                    text: "Clear Visible Answer"
-                                    onClicked: appController.clearVisualAnswer()
+                                    text: "Toggle HUD Collapse"
+                                    onClicked: appController.toggleHudCollapsed()
                                 }
                             }
                         }
@@ -387,6 +387,39 @@ ApplicationWindow {
                         }
 
                         FieldLabel {
+                            text: "Screenshot context"
+                            visible: promptOnly
+                            Layout.alignment: Qt.AlignTop
+                            Layout.topMargin: 10
+                        }
+                        Basic.ScrollView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 104
+                            visible: promptOnly
+                            clip: true
+
+                            background: Rectangle {
+                                radius: 8
+                                color: Colors.backgroundItemActivated
+                                border.width: 1
+                                border.color: screenshotContextArea.activeFocus ? Colors.borderFocused : Colors.borderActivated
+                            }
+
+                            Basic.TextArea {
+                                id: screenshotContextArea
+                                text: appController.settingsStore.screenshotContext
+                                wrapMode: TextArea.Wrap
+                                color: Colors.textPrimary
+                                selectedTextColor: Colors.textPrimary
+                                selectionColor: Colors.secondryBack
+                                padding: 12
+                                font.pixelSize: Typography.t2
+                                background: null
+                                onActiveFocusChanged: if (!activeFocus) appController.settingsStore.screenshotContext = text
+                            }
+                        }
+
+                        FieldLabel {
                             text: "Query"
                             visible: promptOnly
                             Layout.alignment: Qt.AlignTop
@@ -431,12 +464,10 @@ ApplicationWindow {
                     Controls.ComboBox {
                         Layout.fillWidth: true
                         visible: !promptOnly
-                        editable: true
-                        model: ["huihui_ai/qwen3-vl-abliterated:8b-instruct", "gemma4:12b"]
-                        currentIndex: appController.settingsStore.model === "gemma4:12b" ? 1 : 0
-                        editText: appController.settingsStore.model
-                        onAccepted: appController.settingsStore.model = editText
-                        onActivated: appController.settingsStore.model = currentText
+                        editable: false
+                        model: ["huihui_ai/qwen3-vl-abliterated:8b-instruct", "gemma4:12b", "qwen3.6:latest"]
+                        currentIndex: Math.max(0, model.indexOf(appController.settingsStore.model))
+                        onActivated: appController.settingsStore.model = modelTextAt(currentIndex)
                     }
 
                     FieldLabel { text: "Trigger"; visible: !promptOnly }
@@ -447,7 +478,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.triggerShortcut = text
                     }
 
-                    FieldLabel { text: "Clear"; visible: !promptOnly }
+                    FieldLabel { text: "Collapse / expand"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly

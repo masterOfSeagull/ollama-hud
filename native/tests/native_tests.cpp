@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "ChatLogService.h"
 #include "OllamaService.h"
 #include "SettingsStore.h"
 #include "Shortcut.h"
@@ -20,9 +21,10 @@ class NativeTests : public QObject
 private slots:
     void settingsLoadSaveValidation();
     void chatPayloadGeneration();
+    void chatLogIncludesCompletionMetadata();
     void memorySelectionCollapsesDuplicates();
     void shortcutParsing();
-    void clearVisualAnswerKeepsControllerReady();
+    void hudCollapseTogglesWithoutDiscardingText();
     void qmlOverlayLoads();
     void qmlOverlayModuleLoads();
     void qmlMainLoads();
@@ -43,6 +45,7 @@ screenshot_max_edge: 512
 timeout_seconds: 3
 memory_qa_pairs: 2
 instruction: 'Answer briefly.'
+screenshot_context: 'Use the newest image.'
 keep_alive: 1m
 think: false
 query: 'Where now?'
@@ -56,6 +59,7 @@ options:
     QCOMPARE(settings.host, QString("http://127.0.0.1:9999"));
     QCOMPARE(settings.model, QString("test-model"));
     QCOMPARE(settings.memoryQaPairs, 2);
+    QCOMPARE(settings.screenshotContext, QString("Use the newest image."));
     QCOMPARE(settings.think, false);
     QCOMPARE(settings.options.value("num_ctx").toInt(), 4096);
 
@@ -85,6 +89,7 @@ void NativeTests::chatPayloadGeneration()
     HudSettings settings;
     settings.model = "vision-model";
     settings.query = "Where is the exit?";
+    settings.screenshotContext = "Use the current image.";
     settings.memoryQaPairs = 1;
     QList<ChatMemory> memories = {
         {"Old question", "Old answer", "old-image"},
@@ -97,8 +102,30 @@ void NativeTests::chatPayloadGeneration()
     QJsonArray messages = payload.value("messages").toArray();
     QCOMPARE(messages.size(), 5);
     QCOMPARE(messages.at(0).toObject().value("role").toString(), QString("system"));
+    QCOMPARE(messages.at(1).toObject().value("content").toString(), QString("Use the current image."));
     QCOMPARE(messages.at(2).toObject().value("content").toString(), QString("Recent question"));
     QCOMPARE(messages.at(4).toObject().value("images").toArray().at(0).toString(), QString("current-image"));
+
+    settings.screenshotContext.clear();
+    messages = OllamaService::buildChatPayload(settings, "current-image", memories).value("messages").toArray();
+    QCOMPARE(messages.size(), 4);
+    QCOMPARE(messages.at(1).toObject().value("content").toString(), QString("Recent question"));
+}
+
+void NativeTests::chatLogIncludesCompletionMetadata()
+{
+    QTemporaryDir dir;
+    const QString path = dir.filePath("chat.log");
+    HudSettings settings;
+    ChatLogService::write({"capture", "Where now?", {}, "Go left.", {}, "none", {}, "length", 120, 42, 3000000000, 500000000, 1000000000, 1500000000}, settings, path);
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString log = QString::fromUtf8(file.readAll());
+    QVERIFY(log.contains("Done reason: length"));
+    QVERIFY(log.contains("Prompt tokens: 120"));
+    QVERIFY(log.contains("Generated tokens: 42"));
+    QVERIFY(log.contains("Total duration: 3.000 s"));
 }
 
 void NativeTests::memorySelectionCollapsesDuplicates()
@@ -121,14 +148,22 @@ void NativeTests::shortcutParsing()
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, parseShortcut("Alt+1+2"));
 }
 
-void NativeTests::clearVisualAnswerKeepsControllerReady()
+void NativeTests::hudCollapseTogglesWithoutDiscardingText()
 {
     AppController controller;
-    QSignalSpy spy(&controller, &AppController::snapshotChanged);
-    controller.clearVisualAnswer();
-    QVERIFY(spy.count() >= 1);
+    QSignalSpy spy(&controller, &AppController::hudCollapsedChanged);
+    const QString originalMessage = controller.message();
+
+    controller.toggleHudCollapsed();
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(controller.hudCollapsed());
     QCOMPARE(controller.state(), QString("READY"));
-    QVERIFY(controller.message().startsWith("Ready - press "));
+    QCOMPARE(controller.message(), originalMessage);
+
+    controller.toggleHudCollapsed();
+    QCOMPARE(spy.count(), 2);
+    QVERIFY(!controller.hudCollapsed());
+    QCOMPARE(controller.message(), originalMessage);
 }
 
 void NativeTests::qmlOverlayLoads()

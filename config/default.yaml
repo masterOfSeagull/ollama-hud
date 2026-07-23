@@ -11,6 +11,9 @@ think: true
 instruction: >-
   Answer in one short sentence. No chain of thought. Give the best
   direction/action only.
+screenshot_context: >-
+  Prior screenshots and Q&A turns are stale context. Use the current screenshot as the
+  source of truth, and use prior turns only when the current screenshot supports them.
 query: >-
   In this RPG dungeon screenshot, identify the entrance, portal, exit, or door I
   should use next. Which direction or action should I take?
