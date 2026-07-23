@@ -39,37 +39,60 @@ ApplicationWindow {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 18
-                    spacing: 14
+                    anchors.margins: 20
+                    anchors.topMargin: 10
+                    spacing: 0
 
                     Text {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignLeft
+                        Layout.leftMargin: 10
+
                         text: "Ollama HUD"
                         color: Colors.textPrimary
                         font.family: FontSystem.getContentFontBold.name
-                        font.pixelSize: 24
+                        font.pixelSize: 25
+                        horizontalAlignment: Text.AlignLeft
                     }
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignLeft
+                        Layout.leftMargin: 13
+                        Layout.topMargin: 10
+
                         text: appController.hudRunning ? "Overlay running" : "Control panel"
                         color: appController.hudRunning ? Colors.success : Colors.textSecondary
+                        font.family: FontSystem.getContentFontBold.name
                         font.pixelSize: Typography.t2
                         elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignLeft
                     }
 
                     Rectangle {
+                        Layout.topMargin: 10
                         Layout.fillWidth: true
                         height: 1
                         color: Colors.lineBorderActivated
+                    }
+
+                    Item {
+                        width: 1
+                        height: 5
                     }
 
                     Repeater {
                         model: ["Runtime", "Prompt", "Settings", "Log"]
                         delegate: Rectangle {
                             Layout.fillWidth: true
+                            Layout.topMargin: 5
                             height: 42
                             radius: 8
-                            color: nav.currentIndex === index ? Colors.backgroundActivated : "transparent"
+                            color: nav.currentIndex === index
+                                ? Colors.backgroundActivated
+                                : hover.hovered
+                                    ? Colors.backgroundHovered2
+                                    : "transparent"
                             border.width: nav.currentIndex === index ? 1 : 0
                             border.color: Colors.borderActivated
 
@@ -87,6 +110,10 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: nav.currentIndex = index
+                            }
+
+                            HoverHandler {
+                                id: hover
                             }
                         }
                     }

@@ -74,6 +74,7 @@ QtObject {
     readonly property color backgroundActivated: lightMode ? "#ffffff" : "#1e1e24"
     readonly property color backgroundDeactivated: lightMode ? "#E5E5E5" : "#2a2a31"
     readonly property color backgroundHovered: lightMode ? "#dcdcdc" : "#33333b"
+    readonly property color backgroundHovered2: lightMode ? "#dcdcdc" : "#58585f"
     readonly property color backgroundFocused: lightMode ? "#fafafa" : "#222228"
 
     // Background items

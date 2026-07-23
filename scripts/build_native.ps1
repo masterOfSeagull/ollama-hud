@@ -2,6 +2,7 @@ param(
     [switch]$Run,
     [switch]$Verify,
     [switch]$Tests,
+    [switch]$HotReload,
     [string]$Configuration = "Release",
     [string]$QtVersion = "6.9.2",
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -10,7 +11,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$BuildDir = Join-Path $ProjectRoot "build\native"
+if ($HotReload) {
+    $BuildDir = Join-Path $ProjectRoot "build\hotreload"
+    if (-not $PSBoundParameters.ContainsKey("Configuration")) {
+        $Configuration = "Debug"
+    }
+    $hotReloadValue = "ON"
+} else {
+    $BuildDir = Join-Path $ProjectRoot "build\native"
+    $hotReloadValue = "OFF"
+}
 
 function Find-CMake {
     $cmd = Get-Command cmake -ErrorAction SilentlyContinue
@@ -90,7 +100,8 @@ $configureArgs = @(
     "-A", "x64",
     "-DCMAKE_PREFIX_PATH=$qtPrefix",
     "-DQt6_DIR=$(Join-Path $qtPrefix 'lib\cmake\Qt6')",
-    "-DOLLAMA_HUD_BUILD_TESTS=ON"
+    "-DOLLAMA_HUD_BUILD_TESTS=ON",
+    "-DOLLAMA_HUD_HOT_RELOAD=$hotReloadValue"
 )
 
 try {

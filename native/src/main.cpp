@@ -9,6 +9,7 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QTextStream>
+#include <QUrl>
 
 namespace {
 int verify()
@@ -82,7 +83,11 @@ int main(int argc, char *argv[])
         QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] {
             QCoreApplication::exit(1);
         }, Qt::QueuedConnection);
+#ifdef OLLAMA_HUD_HOT_RELOAD
+        engine.load(QUrl::fromLocalFile(QStringLiteral(PROJECT_SOURCE_DIR "/native/qml/OllamaHud/Main.qml")));
+#else
         engine.loadFromModule("OllamaHud", "Main");
+#endif
     }
 
     return app.exec();

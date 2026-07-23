@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(OllamaHud VERSION 0.1.0 LANGUAGES CXX)
 
 option(OLLAMA_HUD_BUILD_TESTS "Build native Qt tests" ON)
+option(OLLAMA_HUD_HOT_RELOAD "Enable QML debugging and disable the QML cache for live preview builds" OFF)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,6 +46,12 @@ target_compile_definitions(OllamaHud PRIVATE
     PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
+set(OLLAMA_HUD_QML_MODULE_OPTIONS)
+if(OLLAMA_HUD_HOT_RELOAD)
+    target_compile_definitions(OllamaHud PRIVATE QT_QML_DEBUG OLLAMA_HUD_HOT_RELOAD)
+    list(APPEND OLLAMA_HUD_QML_MODULE_OPTIONS NO_CACHEGEN)
+endif()
+
 target_link_libraries(OllamaHud PRIVATE
     Qt6::Core
     Qt6::Gui
@@ -61,6 +68,7 @@ endif()
 qt_add_qml_module(OllamaHud
     URI OllamaHud
     VERSION 1.0
+    ${OLLAMA_HUD_QML_MODULE_OPTIONS}
     QML_FILES
         native/qml/OllamaHud/Main.qml
         native/qml/OllamaHud/Overlay.qml

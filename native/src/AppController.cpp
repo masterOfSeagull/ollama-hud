@@ -267,7 +267,11 @@ void AppController::ensureOverlay()
         engine->addImportPath("qrc:/native/qml");
     }
     QQmlComponent component(engine, this);
+#ifdef OLLAMA_HUD_HOT_RELOAD
+    component.loadUrl(QUrl::fromLocalFile(QStringLiteral(PROJECT_SOURCE_DIR "/native/qml/OllamaHud/Overlay.qml")));
+#else
     component.loadFromModule("OllamaHud", "Overlay");
+#endif
     QObject *created = component.createWithInitialProperties({{"appController", QVariant::fromValue(this)}});
     if (!created) {
         setSnapshot({"ERROR", component.errorString(), false, m_snapshot.captureId, true});

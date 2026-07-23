@@ -67,6 +67,21 @@ the timestamp, model, capture ID, question, included Q/A memory, answer or
 error, retry status, screenshot attachment status, and chat message preview.
 Screenshot payloads are not written to the log.
 
+## QML hot reload (development only)
+
+Build the separate debug-oriented preview tree, then start it through Qt's QML
+Preview tool:
+
+```powershell
+.\scripts\build_native.ps1 -HotReload
+C:\Qt\6.9.2\msvc2022_64\bin\qmlpreview.exe --verbose .\build\hotreload\Debug\OllamaHud.exe
+```
+
+With `-HotReload`, QML debugging is enabled and QML cache generation is
+disabled, so saving `native\qml\OllamaHud\Main.qml` or `Overlay.qml` updates
+the running preview. This build is intentionally separate from the regular
+cache-compiled Release build and must not be packaged or distributed.
+
 ## Checks
 
 ```powershell
