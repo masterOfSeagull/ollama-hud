@@ -2,25 +2,28 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
 
-import GenyDL
+import OllamaHud.UI
 
 Window {
     id: overlay
     property var appController
 
-    width: Math.min(620, Screen.width - 48)
-    height: appController && appController.hudCollapsed
-        ? stateText.implicitHeight + 28
-        : Math.max(96, stateText.implicitHeight + messageText.implicitHeight + 40)
-    x: 18
-    y: 18
+    width: Screen.width
+    height: Screen.height
+    x: Screen.virtualX
+    y: Screen.virtualY
     visible: true
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput
 
     Rectangle {
         id: panel
-        anchors.fill: parent
+        x: 18
+        y: 18
+        width: Math.min(620, overlay.width - 48)
+        height: appController && appController.hudCollapsed
+            ? stateText.implicitHeight + 28
+            : Math.max(96, stateText.implicitHeight + messageText.implicitHeight + 40)
         radius: 8
         color: appController && appController.error ? "#d02024" : "#101014"
         opacity: 0.92
@@ -54,6 +57,24 @@ Window {
             font.family: FontSystem.getContentFontBold.name
             wrapMode: Text.WordWrap
             elide: Text.ElideNone
+        }
+    }
+
+    Repeater {
+        model: appController ? appController.detectorBoxes : []
+        delegate: Item {
+            required property var modelData
+            x: modelData.x
+            y: modelData.y
+            width: Math.max(1, modelData.width)
+            height: Math.max(1, modelData.height)
+            Rectangle { anchors.fill: parent; color: "transparent"; border.width: 2; border.color: "#55e6a5" }
+            Rectangle {
+                x: 0; y: -24; height: 22
+                width: labelText.implicitWidth + 12
+                color: "#153b2d"
+                Text { id: labelText; anchors.centerIn: parent; text: modelData.label + " " + Number(modelData.score).toFixed(2); color: "#ffffff"; font.pixelSize: 12 }
+            }
         }
     }
 }

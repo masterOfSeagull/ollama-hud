@@ -10,6 +10,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTextStream>
 #include <algorithm>
 #include <stdexcept>
@@ -268,6 +269,10 @@ HudSettings SettingsStore::loadFromPath(const QString &path)
     settings.triggerShortcut = stringValue(data, "trigger_shortcut", settings.triggerShortcut);
     settings.exitShortcut = stringValue(data, "exit_shortcut", settings.exitShortcut);
     settings.clearShortcut = stringValue(data, "clear_shortcut", settings.clearShortcut);
+    settings.simulationTriggerShortcut = stringValue(data, "simulation_trigger_shortcut", settings.simulationTriggerShortcut);
+    settings.simulationStopShortcut = stringValue(data, "simulation_stop_shortcut", settings.simulationStopShortcut);
+    settings.detectorToggleShortcut = stringValue(data, "detector_toggle_shortcut", settings.detectorToggleShortcut);
+    settings.liveDetectionToggleShortcut = stringValue(data, "live_detection_toggle_shortcut", settings.liveDetectionToggleShortcut);
     settings.screenshotMaxEdge = std::max(64, intValue(data, "screenshot_max_edge", settings.screenshotMaxEdge));
     settings.timeoutSeconds = std::max(1.0, doubleValue(data, "timeout_seconds", settings.timeoutSeconds));
     settings.memoryQaPairs = std::max(0, intValue(data, "memory_qa_pairs", settings.memoryQaPairs));
@@ -301,6 +306,10 @@ void SettingsStore::saveToPath(const HudSettings &settings, const QString &path)
     out << "trigger_shortcut: " << quoteYaml(settings.triggerShortcut) << "\n";
     out << "exit_shortcut: " << quoteYaml(settings.exitShortcut) << "\n";
     out << "clear_shortcut: " << quoteYaml(settings.clearShortcut) << "\n";
+    out << "simulation_trigger_shortcut: " << quoteYaml(settings.simulationTriggerShortcut) << "\n";
+    out << "simulation_stop_shortcut: " << quoteYaml(settings.simulationStopShortcut) << "\n";
+    out << "detector_toggle_shortcut: " << quoteYaml(settings.detectorToggleShortcut) << "\n";
+    out << "live_detection_toggle_shortcut: " << quoteYaml(settings.liveDetectionToggleShortcut) << "\n";
     out << "screenshot_max_edge: " << settings.screenshotMaxEdge << "\n";
     out << "timeout_seconds: " << settings.timeoutSeconds << "\n";
     out << "memory_qa_pairs: " << settings.memoryQaPairs << "\n";
@@ -326,6 +335,22 @@ void SettingsStore::validate(const HudSettings &settings)
     parseShortcut(settings.triggerShortcut);
     parseShortcut(settings.exitShortcut);
     parseShortcut(settings.clearShortcut);
+    const QStringList shortcuts = {
+        parseShortcut(settings.triggerShortcut).display(),
+        parseShortcut(settings.exitShortcut).display(),
+        parseShortcut(settings.clearShortcut).display(),
+        parseShortcut(settings.simulationTriggerShortcut).display(),
+        parseShortcut(settings.simulationStopShortcut).display(),
+        parseShortcut(settings.detectorToggleShortcut).display(),
+        parseShortcut(settings.liveDetectionToggleShortcut).display(),
+    };
+    QSet<QString> uniqueShortcuts;
+    for (const QString &shortcut : shortcuts) {
+        if (uniqueShortcuts.contains(shortcut)) {
+            throw std::invalid_argument(QStringLiteral("Shortcut collision: %1").arg(shortcut).toStdString());
+        }
+        uniqueShortcuts.insert(shortcut);
+    }
     if (settings.screenshotMaxEdge < 64) {
         throw std::invalid_argument("Screenshot max edge must be at least 64.");
     }
@@ -401,6 +426,14 @@ QString SettingsStore::exitShortcut() const { return m_settings.exitShortcut; }
 void SettingsStore::setExitShortcut(const QString &value) { m_settings.exitShortcut = value; emit settingsChanged(); }
 QString SettingsStore::clearShortcut() const { return m_settings.clearShortcut; }
 void SettingsStore::setClearShortcut(const QString &value) { m_settings.clearShortcut = value; emit settingsChanged(); }
+QString SettingsStore::simulationTriggerShortcut() const { return m_settings.simulationTriggerShortcut; }
+void SettingsStore::setSimulationTriggerShortcut(const QString &value) { m_settings.simulationTriggerShortcut = value; emit settingsChanged(); }
+QString SettingsStore::simulationStopShortcut() const { return m_settings.simulationStopShortcut; }
+void SettingsStore::setSimulationStopShortcut(const QString &value) { m_settings.simulationStopShortcut = value; emit settingsChanged(); }
+QString SettingsStore::detectorToggleShortcut() const { return m_settings.detectorToggleShortcut; }
+void SettingsStore::setDetectorToggleShortcut(const QString &value) { m_settings.detectorToggleShortcut = value; emit settingsChanged(); }
+QString SettingsStore::liveDetectionToggleShortcut() const { return m_settings.liveDetectionToggleShortcut; }
+void SettingsStore::setLiveDetectionToggleShortcut(const QString &value) { m_settings.liveDetectionToggleShortcut = value; emit settingsChanged(); }
 int SettingsStore::screenshotMaxEdge() const { return m_settings.screenshotMaxEdge; }
 void SettingsStore::setScreenshotMaxEdge(int value) { m_settings.screenshotMaxEdge = value; emit settingsChanged(); }
 double SettingsStore::timeoutSeconds() const { return m_settings.timeoutSeconds; }

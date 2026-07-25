@@ -3,6 +3,10 @@ model: huihui_ai/qwen3-vl-abliterated:8b-instruct
 trigger_shortcut: Alt+1
 exit_shortcut: Esc
 clear_shortcut: Alt+2
+simulation_trigger_shortcut: Alt+3
+simulation_stop_shortcut: Alt+4
+detector_toggle_shortcut: Alt+5
+live_detection_toggle_shortcut: Alt+6
 screenshot_max_edge: 1280
 timeout_seconds: 120
 memory_qa_pairs: 3

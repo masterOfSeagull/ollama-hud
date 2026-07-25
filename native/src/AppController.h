@@ -1,14 +1,19 @@
 #pragma once
 
 #include "OllamaService.h"
+#include "DetectorClient.h"
+#include "DetectorSettingsStore.h"
+#include "InputSimulationService.h"
 #include "SettingsStore.h"
 #include "Shortcut.h"
 
 #include <QFutureWatcher>
 #include <QImage>
+#include <QJsonObject>
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
+#include <QVariantList>
 #include <exception>
 
 struct RuntimeSnapshot
@@ -26,12 +31,15 @@ struct CaptureRequestResult
     QString answer;
     QString memoryImageB64;
     HudSettings settings;
+    QJsonObject detectorResult;
+    bool resumeLive = false;
 };
 
 class AppController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(SettingsStore *settingsStore READ settingsStore CONSTANT)
+    Q_PROPERTY(DetectorSettingsStore *detectorSettingsStore READ detectorSettingsStore CONSTANT)
     Q_PROPERTY(QString state READ state NOTIFY snapshotChanged)
     Q_PROPERTY(QString message READ message NOTIFY snapshotChanged)
     Q_PROPERTY(QString visualAnswer READ visualAnswer NOTIFY snapshotChanged)
@@ -40,12 +48,18 @@ class AppController : public QObject
     Q_PROPERTY(bool hudCollapsed READ hudCollapsed NOTIFY hudCollapsedChanged)
     Q_PROPERTY(bool hudRunning READ hudRunning NOTIFY hudRunningChanged)
     Q_PROPERTY(bool error READ error NOTIFY snapshotChanged)
+    Q_PROPERTY(bool simulationRunning READ simulationRunning NOTIFY simulationChanged)
+    Q_PROPERTY(QString simulationStatus READ simulationStatus NOTIFY simulationChanged)
+    Q_PROPERTY(QString detectorStatus READ detectorStatus NOTIFY detectorChanged)
+    Q_PROPERTY(bool liveDetection READ liveDetection NOTIFY detectorChanged)
+    Q_PROPERTY(QVariantList detectorBoxes READ detectorBoxes NOTIFY detectorChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
     ~AppController() override;
 
     SettingsStore *settingsStore();
+    DetectorSettingsStore *detectorSettingsStore();
     QString state() const;
     QString message() const;
     QString visualAnswer() const;
@@ -54,6 +68,11 @@ public:
     bool hudCollapsed() const;
     bool hudRunning() const;
     bool error() const;
+    bool simulationRunning() const;
+    QString simulationStatus() const;
+    QString detectorStatus() const;
+    bool liveDetection() const;
+    QVariantList detectorBoxes() const;
 
     Q_INVOKABLE void startHud();
     Q_INVOKABLE void stopHud();
@@ -61,19 +80,30 @@ public:
     Q_INVOKABLE void testOllama();
     Q_INVOKABLE void clearVisualAnswer();
     Q_INVOKABLE void toggleHudCollapsed();
+    Q_INVOKABLE void stopSimulation();
     Q_INVOKABLE bool saveSettings();
+    Q_INVOKABLE void startLiveDetection();
+    Q_INVOKABLE void stopLiveDetection();
+    Q_INVOKABLE void toggleDetectorEnabled();
+    Q_INVOKABLE void toggleLiveDetection();
 
 signals:
     void snapshotChanged();
     void hudCollapsedChanged();
     void hudRunningChanged();
     void transientMessage(const QString &message);
+    void simulationChanged();
+    void detectorChanged();
 
 private:
-    CaptureRequestResult runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories);
+    CaptureRequestResult runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings);
     void setSnapshot(const RuntimeSnapshot &snapshot);
-    void runAsyncRequest();
-    void captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories);
+    void runAsyncRequest(bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings);
+    void captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories, bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings);
+    bool prepareDetector();
+    void resumeLiveDetection();
+    void updateDetectorBoxes(const QJsonObject &result);
+    void pollDetectorLive();
     void ensureOverlay();
     void closeOverlay();
     void pollHotkeys();
@@ -81,14 +111,25 @@ private:
     QString shortError(const std::exception &error) const;
 
     SettingsStore m_settingsStore;
+    DetectorSettingsStore m_detectorSettingsStore;
     OllamaService m_ollamaService;
+    DetectorClient m_detectorClient;
+    InputSimulationService m_inputSimulation;
     RuntimeSnapshot m_snapshot;
     QList<ChatMemory> m_memories;
     QTimer m_hotkeyTimer;
+    QTimer m_detectorPollTimer;
     QPointer<QObject> m_overlay;
     QFutureWatcher<CaptureRequestResult> m_requestWatcher;
     bool m_hudRunning = false;
     bool m_hudCollapsed = false;
     bool m_triggerArmed = true;
     bool m_clearArmed = true;
+    bool m_simulationTriggerArmed = true;
+    bool m_simulationStopArmed = true;
+    bool m_detectorToggleArmed = true;
+    bool m_liveDetectionToggleArmed = true;
+    bool m_liveDetection = false;
+    QString m_detectorStatus = "Disabled";
+    QVariantList m_detectorBoxes;
 };

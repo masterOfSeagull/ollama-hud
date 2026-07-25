@@ -2,10 +2,11 @@ import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Controls.Basic as Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
-import GenyDL
-import GenyDL.Controls as Controls
+import OllamaHud.UI
+import OllamaHud.UI.Controls as Controls
 
 ApplicationWindow {
     id: root
@@ -23,6 +24,16 @@ ApplicationWindow {
     }
 
     Component.onCompleted: AppGlobals.appWindow = root
+
+    Loader {
+        active: hotReloadEnabled
+        sourceComponent: Component {
+            Shortcut {
+                sequence: "F5"
+                onActivated: HotReload.reload()
+            }
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -82,7 +93,7 @@ ApplicationWindow {
                     }
 
                     Repeater {
-                        model: ["Runtime", "Prompt", "Settings", "Log"]
+                        model: ["Runtime", "Prompt", "Settings", "Detector", "Log"]
                         delegate: Rectangle {
                             Layout.fillWidth: true
                             Layout.topMargin: 5
@@ -119,6 +130,55 @@ ApplicationWindow {
                     }
 
                     Item { Layout.fillHeight: true }
+
+                    Rectangle {
+                        id: themeToggle
+                        Layout.alignment: Qt.AlignLeft | Qt.AlignBottom
+                        Layout.leftMargin: 10
+                        implicitWidth: 66
+                        implicitHeight: 32
+                        radius: height / 2
+                        color: Colors.backgroundItemActivated
+                        border.width: 1
+                        border.color: Colors.borderActivated
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 9
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "☀"
+                            color: Colors.lightMode ? Colors.warning : Colors.textMuted
+                            font.pixelSize: 16
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            anchors.rightMargin: 9
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "☾"
+                            color: Colors.lightMode ? Colors.textMuted : Colors.textPrimary
+                            font.pixelSize: 17
+                        }
+                        Rectangle {
+                            width: 26
+                            height: 26
+                            radius: width / 2
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: Colors.lightMode ? 3 : parent.width - width - 3
+                            color: Colors.lightMode ? "#fff6d6" : Colors.backgroundFocused
+                            border.width: 1
+                            border.color: Colors.borderActivated
+                            Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Colors.mode = Colors.lightMode ? Colors.modeDark : Colors.modeLight
+                        }
+                        HoverHandler { id: themeToggleHover }
+                        ToolTip.visible: themeToggleHover.hovered
+                        ToolTip.text: Colors.lightMode ? "Switch to dark theme" : "Switch to light theme"
+                        ToolTip.delay: 500
+                    }
 
                 }
             }
@@ -205,7 +265,7 @@ ApplicationWindow {
                                     expanded: true
                                     title: "Runtime"
                                     body: appController.visualAnswer.length > 0 ? appController.visualAnswer : "Ready for the next trigger."
-                                    foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Collapse " + appController.settingsStore.clearShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
+                                    foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Sim " + appController.settingsStore.simulationTriggerShortcut + " / stop " + appController.settingsStore.simulationStopShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
                                     stateColor: appController.error ? Colors.error : (appController.active ? Colors.warning : Colors.success)
                                 }
 
@@ -219,6 +279,14 @@ ApplicationWindow {
                                         title: "Model"
                                         body: appController.settingsStore.model
                                         foot: appController.settingsStore.host
+                                    }
+                                    RuntimeCard {
+                                        Layout.fillWidth: true
+                                        implicitHeight: 126
+                                        title: "Input simulation"
+                                        body: appController.simulationRunning ? "Running" : appController.simulationStatus
+                                        foot: "Start " + appController.settingsStore.simulationTriggerShortcut + "  |  Stop " + appController.settingsStore.simulationStopShortcut
+                                        stateColor: appController.simulationRunning ? Colors.warning : Colors.success
                                     }
                                     RuntimeCard {
                                         Layout.fillWidth: true
@@ -246,6 +314,8 @@ ApplicationWindow {
                     SettingsPage {
                         promptOnly: false
                     }
+
+                    DetectorPage { }
 
                     ScrollView {
                         id: logScroll
@@ -521,6 +591,38 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.exitShortcut = text
                     }
 
+                    FieldLabel { text: "Simulation trigger"; visible: !promptOnly }
+                    Controls.TextField {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        text: appController.settingsStore.simulationTriggerShortcut
+                        onEditingFinished: appController.settingsStore.simulationTriggerShortcut = text
+                    }
+
+                    FieldLabel { text: "Simulation emergency stop"; visible: !promptOnly }
+                    Controls.TextField {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        text: appController.settingsStore.simulationStopShortcut
+                        onEditingFinished: appController.settingsStore.simulationStopShortcut = text
+                    }
+
+                    FieldLabel { text: "Detector on / off"; visible: !promptOnly }
+                    Controls.TextField {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        text: appController.settingsStore.detectorToggleShortcut
+                        onEditingFinished: appController.settingsStore.detectorToggleShortcut = text
+                    }
+
+                    FieldLabel { text: "Live detection on / off"; visible: !promptOnly }
+                    Controls.TextField {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        text: appController.settingsStore.liveDetectionToggleShortcut
+                        onEditingFinished: appController.settingsStore.liveDetectionToggleShortcut = text
+                    }
+
                     FieldLabel { text: "Screenshot max edge"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 140
@@ -656,6 +758,246 @@ ApplicationWindow {
             top: 1000000
             decimals: 4
             notation: DoubleValidator.StandardNotation
+        }
+    }
+
+    component DetectorPage: ScrollView {
+        id: detectorScroll
+        clip: true
+        contentWidth: availableWidth
+        contentHeight: detectorContent.implicitHeight + 44
+        property int guideTargetIndex: -1
+
+        FolderDialog {
+            id: guideFolderDialog
+            property bool positiveFolder: true
+            title: (positiveFolder ? "Choose positive guide folder" : "Choose negative guide folder") + (guideTargetIndex >= 0 ? " for image target" : "")
+            onAccepted: {
+                if (guideTargetIndex >= 0)
+                    appController.detectorSettingsStore.setImageTargetGuideFolder(guideTargetIndex, positiveFolder, selectedFolder.toLocalFile())
+                else if (positiveFolder)
+                    appController.detectorSettingsStore.positiveGuideFolder = selectedFolder.toLocalFile()
+                else
+                    appController.detectorSettingsStore.negativeGuideFolder = selectedFolder.toLocalFile()
+            }
+        }
+
+        FileDialog {
+            id: detectorSettingsSaveDialog
+            title: "Save detector settings"
+            fileMode: FileDialog.SaveFile
+            currentFolder: appController.detectorSettingsStore.settingsFolder
+            defaultSuffix: "json"
+            nameFilters: ["Detector settings (*.json)"]
+            onAccepted: appController.detectorSettingsStore.saveToFile(selectedFile.toLocalFile())
+        }
+
+        FileDialog {
+            id: detectorSettingsLoadDialog
+            title: "Load detector settings"
+            fileMode: FileDialog.OpenFile
+            currentFolder: appController.detectorSettingsStore.settingsFolder
+            nameFilters: ["Detector settings (*.json)"]
+            onAccepted: appController.detectorSettingsStore.loadFromFile(selectedFile.toLocalFile())
+        }
+
+        Item {
+            width: detectorScroll.availableWidth
+            height: detectorContent.implicitHeight + 44
+
+            ColumnLayout {
+                id: detectorContent
+                x: 22
+                y: 22
+                width: Math.max(520, parent.width - 44)
+                spacing: 14
+
+                RuntimeCard {
+                    Layout.fillWidth: true
+                    title: "OWLv2 detector"
+                    body: appController.detectorStatus
+                    foot: "Guide scores are raw OWLv2 logits; text scores are confidence values. Detector " + appController.settingsStore.detectorToggleShortcut + " | Live " + appController.settingsStore.liveDetectionToggleShortcut + "."
+                    stateColor: appController.liveDetection ? Colors.success : (appController.detectorSettingsStore.enabled ? Colors.warning : Colors.textMuted)
+                    expanded: true
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    radius: 8
+                    color: Colors.backgroundActivated
+                    border.width: 1
+                    border.color: Colors.borderActivated
+                    implicitHeight: detectorGrid.implicitHeight + 36
+
+                    GridLayout {
+                        id: detectorGrid
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        columns: 2
+                        rowSpacing: 12
+                        columnSpacing: 14
+
+                        FieldLabel { text: "Enable ground detector" }
+                        Controls.Switch {
+                            checked: appController.detectorSettingsStore.enabled
+                            onToggled: appController.detectorSettingsStore.enabled = checked
+                        }
+                        FieldLabel { text: "Model" }
+                        Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.model; onEditingFinished: appController.detectorSettingsStore.model = text }
+                        FieldLabel { text: "Device / dtype" }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.ComboBox { Layout.preferredWidth: 130; model: ["auto", "cpu", "cuda"]; currentIndex: Math.max(0, model.indexOf(appController.detectorSettingsStore.device)); onActivated: appController.detectorSettingsStore.device = modelTextAt(currentIndex) }
+                            Controls.ComboBox { Layout.preferredWidth: 130; model: ["auto", "float32", "float16", "bfloat16"]; currentIndex: Math.max(0, model.indexOf(appController.detectorSettingsStore.dtype)); onActivated: appController.detectorSettingsStore.dtype = modelTextAt(currentIndex) }
+                        }
+                        FieldLabel { text: "Text threshold" }
+                        OptionField { text: appController.detectorSettingsStore.textThreshold; onEditingFinished: appController.detectorSettingsStore.textThreshold = parseFloat(text) }
+                        FieldLabel { text: "Guide threshold (raw logit)" }
+                        OptionField { text: appController.detectorSettingsStore.guideThreshold; onEditingFinished: appController.detectorSettingsStore.guideThreshold = parseFloat(text) }
+                        FieldLabel { text: "Positive guide folder" }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.positiveGuideFolder; onEditingFinished: appController.detectorSettingsStore.positiveGuideFolder = text }
+                            Controls.Button { text: "Browse"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
+                        }
+                        FieldLabel { text: "Negative guide folder" }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.negativeGuideFolder; onEditingFinished: appController.detectorSettingsStore.negativeGuideFolder = text }
+                            Controls.Button { text: "Browse"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
+                        }
+                        FieldLabel { text: "Live detection rate (Hz)" }
+                        OptionField { text: appController.detectorSettingsStore.liveRate; onEditingFinished: appController.detectorSettingsStore.liveRate = parseFloat(text) }
+                        FieldLabel { text: "Targets"; Layout.alignment: Qt.AlignTop; Layout.topMargin: 10 }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Text prompts may have their own threshold, for example entrance:0.3, portal:0.6; prompts without :threshold use the global text threshold. Image targets use positive and optional negative image sets; default folders are searched recursively at positive guide folder/Target name/ and negative guide folder/Target name/."
+                                wrapMode: Text.WordWrap
+                                color: Colors.textMuted
+                                font.pixelSize: Typography.t3
+                            }
+                            Repeater {
+                                model: appController.detectorSettingsStore.targets
+                                delegate: Rectangle {
+                                    required property int index
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    radius: 8
+                                    color: Colors.backgroundItemActivated
+                                    border.width: 1
+                                    border.color: Colors.borderActivated
+                                    implicitHeight: targetFields.implicitHeight + 22
+                                    ColumnLayout {
+                                        id: targetFields
+                                        anchors.fill: parent
+                                        anchors.margins: 11
+                                        spacing: 7
+                                        Text { text: modelData.type === "image" ? "Image target" : "Text target"; color: Colors.textSecondary; font.pixelSize: Typography.t3; font.bold: true }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            FieldLabel { text: modelData.type === "image" && useDefaultGuideDirectories.checked ? "Search for target" : "Target name" }
+                                            Controls.TextField {
+                                                id: textNameField
+                                                Layout.fillWidth: true
+                                                visible: modelData.type !== "image"
+                                                text: modelData.name
+                                                onEditingFinished: appController.detectorSettingsStore.updateTextTarget(index, text, textPromptsField.text)
+                                            }
+                                            Controls.TextField {
+                                                id: imageNameField
+                                                Layout.fillWidth: true
+                                                visible: modelData.type === "image" && !useDefaultGuideDirectories.checked
+                                                text: modelData.name
+                                                onEditingFinished: appController.detectorSettingsStore.updateImageTarget(index, text, useDefaultGuideDirectories.checked, positiveGuideDir.text, negativeGuideDir.text)
+                                            }
+                                            Controls.ComboBox {
+                                                id: imageTargetSearch
+                                                Layout.fillWidth: true
+                                                visible: modelData.type === "image" && useDefaultGuideDirectories.checked
+                                                model: appController.detectorSettingsStore.defaultGuideTargetNames
+                                                currentIndex: appController.detectorSettingsStore.defaultGuideTargetIndex(modelData.name)
+                                                onActivated: appController.detectorSettingsStore.updateImageTarget(index, modelTextAt(currentIndex), true, positiveGuideDir.text, negativeGuideDir.text)
+                                            }
+                                            Controls.Button { text: "Remove"; onClicked: appController.detectorSettingsStore.removeTarget(index) }
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            visible: modelData.type !== "image"
+                                            FieldLabel { text: "Prompts (optional :threshold)" }
+                                            Controls.TextField {
+                                                id: textPromptsField
+                                                Layout.fillWidth: true
+                                                text: modelData.prompts
+                                                placeholderText: "entrance:0.3, portal:0.6, cave door:0.1"
+                                                onEditingFinished: appController.detectorSettingsStore.updateTextTarget(index, textNameField.text, text)
+                                            }
+                                        }
+                                        Controls.CheckBox {
+                                            id: useDefaultGuideDirectories
+                                            visible: modelData.type === "image"
+                                            text: "Use default guide image-set directories"
+                                            checked: modelData.useDefaultGuideDirectories
+                                            onToggled: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, checked, positiveGuideDir.text, negativeGuideDir.text)
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            visible: modelData.type === "image" && useDefaultGuideDirectories.checked
+                                            text: "Searches recursively in:\nPositive: " + appController.detectorSettingsStore.positiveGuideFolder + "/" + modelData.name + "/\nNegative: " + appController.detectorSettingsStore.negativeGuideFolder + "/" + modelData.name + "/"
+                                            wrapMode: Text.WordWrap
+                                            color: Colors.textMuted
+                                            font.pixelSize: Typography.t3
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            visible: modelData.type === "image" && !useDefaultGuideDirectories.checked
+                                            FieldLabel { text: "Positive images folder" }
+                                            Controls.TextField {
+                                                id: positiveGuideDir
+                                                Layout.fillWidth: true
+                                                text: modelData.positiveGuideDir
+                                                placeholderText: "Required; subfolders are included"
+                                                onEditingFinished: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, false, text, negativeGuideDir.text)
+                                            }
+                                            Controls.Button { text: "Choose"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            visible: modelData.type === "image" && !useDefaultGuideDirectories.checked
+                                            FieldLabel { text: "Negative images folder" }
+                                            Controls.TextField {
+                                                id: negativeGuideDir
+                                                Layout.fillWidth: true
+                                                text: modelData.negativeGuideDir
+                                                placeholderText: "Optional; subfolders are included"
+                                                onEditingFinished: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, false, positiveGuideDir.text, text)
+                                            }
+                                            Controls.Button { text: "Choose"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
+                                        }
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                Controls.Button { text: "+ Add text target"; onClicked: appController.detectorSettingsStore.addTextTarget() }
+                                Controls.Button { text: "+ Add image target"; onClicked: appController.detectorSettingsStore.addImageTarget() }
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Button { text: "Save detector settings"; isDefault: true; onClicked: appController.detectorSettingsStore.save() }
+                    Controls.Button { text: "Save As..."; onClicked: detectorSettingsSaveDialog.open() }
+                    Controls.Button { text: "Load..."; onClicked: detectorSettingsLoadDialog.open() }
+                    Controls.Button { text: appController.liveDetection ? "Stop Live Detection" : "Start Live Detection"; style: appController.liveDetection ? "danger" : "success"; onClicked: appController.liveDetection ? appController.stopLiveDetection() : appController.startLiveDetection() }
+                    Controls.Button { text: "Detector defaults"; onClicked: appController.detectorSettingsStore.resetToDefaults() }
+                    Item { Layout.fillWidth: true }
+                    Text { text: appController.detectorSettingsStore.lastError; color: Colors.error; visible: text.length > 0; font.pixelSize: Typography.t3 }
+                }
+            }
         }
     }
 }

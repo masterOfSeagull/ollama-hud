@@ -69,18 +69,27 @@ Screenshot payloads are not written to the log.
 
 ## QML hot reload (development only)
 
-Build the separate debug-oriented preview tree, then start it through Qt's QML
-Preview tool:
+Build the separate Debug tree and run it directly:
 
 ```powershell
-.\scripts\build_native.ps1 -HotReload
-C:\Qt\6.9.2\msvc2022_64\bin\qmlpreview.exe --verbose .\build\hotreload\Debug\OllamaHud.exe
+.\scripts\build_native.ps1 -HotReload -Configuration Debug
+.\build\hotreload\Debug\OllamaHud.exe
 ```
 
-With `-HotReload`, QML debugging is enabled and QML cache generation is
-disabled, so saving `native\qml\OllamaHud\Main.qml` or `Overlay.qml` updates
-the running preview. This build is intentionally separate from the regular
-cache-compiled Release build and must not be packaged or distributed.
+Or configure it directly:
+
+```powershell
+cmake -S . -B build\hotreload -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH=C:\Qt\6.9.2\msvc2022_64 -DOLLAMA_HUD_HOT_RELOAD=ON
+cmake --build build\hotreload --config Debug
+.\build\hotreload\Debug\OllamaHud.exe
+```
+
+The hot-reload build loads the local `native\qml` tree, disables QML disk and
+generated caches, and uses F5 in the main configuration window to recreate it.
+This build is intentionally separate from the regular cache-compiled Release
+build and must not be packaged or distributed. Do not combine this manual
+cache-clearing mechanism with active `qmlpreview` updates; restart Preview for
+singleton edits instead.
 
 ## Checks
 

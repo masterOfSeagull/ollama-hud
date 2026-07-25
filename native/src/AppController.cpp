@@ -8,6 +8,7 @@
 #include <QQmlContext>
 #include <QGuiApplication>
 #include <QImage>
+#include <QJsonArray>
 #include <QMetaObject>
 #include <QQmlEngine>
 #include <QQuickWindow>
@@ -54,12 +55,21 @@ AppController::AppController(QObject *parent)
     m_snapshot.message = QStringLiteral("Ready - press %1").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
     connect(&m_hotkeyTimer, &QTimer::timeout, this, &AppController::pollHotkeys);
     m_hotkeyTimer.setInterval(30);
+    connect(&m_inputSimulation, &InputSimulationService::changed, this, &AppController::simulationChanged);
+    connect(&m_detectorPollTimer, &QTimer::timeout, this, &AppController::pollDetectorLive);
+    m_detectorPollTimer.setInterval(250);
     connect(&m_requestWatcher, &QFutureWatcher<CaptureRequestResult>::finished, this, [this] {
         const CaptureRequestResult result = m_requestWatcher.result();
         if (result.snapshot.state == "ANSWER") {
             rememberAnswer(result.answer, result.memoryImageB64, result.settings);
         }
+        if (!result.detectorResult.isEmpty()) {
+            updateDetectorBoxes(result.detectorResult);
+        }
         setSnapshot(result.snapshot);
+        if (result.resumeLive) {
+            resumeLiveDetection();
+        }
     });
 }
 
@@ -70,6 +80,7 @@ AppController::~AppController()
 }
 
 SettingsStore *AppController::settingsStore() { return &m_settingsStore; }
+DetectorSettingsStore *AppController::detectorSettingsStore() { return &m_detectorSettingsStore; }
 QString AppController::state() const { return m_snapshot.state; }
 QString AppController::message() const { return m_snapshot.message; }
 QString AppController::visualAnswer() const { return m_snapshot.state == "ANSWER" ? m_snapshot.message : QString(); }
@@ -78,6 +89,11 @@ bool AppController::active() const { return m_snapshot.active; }
 bool AppController::hudCollapsed() const { return m_hudCollapsed; }
 bool AppController::hudRunning() const { return m_hudRunning; }
 bool AppController::error() const { return m_snapshot.isError; }
+bool AppController::simulationRunning() const { return m_inputSimulation.running(); }
+QString AppController::simulationStatus() const { return m_inputSimulation.status(); }
+QString AppController::detectorStatus() const { return m_detectorStatus; }
+bool AppController::liveDetection() const { return m_liveDetection; }
+QVariantList AppController::detectorBoxes() const { return m_detectorBoxes; }
 
 void AppController::startHud()
 {
@@ -96,6 +112,8 @@ void AppController::startHud()
 void AppController::stopHud()
 {
     m_hotkeyTimer.stop();
+    m_inputSimulation.stop(QStringLiteral("HUD stopped"));
+    stopLiveDetection();
     closeOverlay();
     if (m_hudRunning) {
         m_hudRunning = false;
@@ -111,7 +129,18 @@ void AppController::captureOnce()
     if (!saveSettings()) {
         return;
     }
-    runAsyncRequest();
+    const bool detectorEnabled = m_detectorSettingsStore.enabled();
+    const DetectorSettings detectorSettings = m_detectorSettingsStore.settings();
+    const bool resumeLive = m_liveDetection;
+    if (detectorEnabled) {
+        if (!prepareDetector()) {
+            return;
+        }
+        if (resumeLive) {
+            stopLiveDetection();
+        }
+    }
+    runAsyncRequest(resumeLive, detectorEnabled, detectorSettings);
 }
 
 void AppController::testOllama()
@@ -145,6 +174,11 @@ void AppController::toggleHudCollapsed()
     emit hudCollapsedChanged();
 }
 
+void AppController::stopSimulation()
+{
+    m_inputSimulation.stop(QStringLiteral("Stopped by user"));
+}
+
 bool AppController::saveSettings()
 {
     if (m_settingsStore.save()) {
@@ -154,7 +188,101 @@ bool AppController::saveSettings()
     return false;
 }
 
-CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories)
+bool AppController::prepareDetector()
+{
+    if (!m_detectorSettingsStore.save()) {
+        m_detectorStatus = m_detectorSettingsStore.lastError();
+        emit detectorChanged();
+        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+        return false;
+    }
+    QString error;
+    if (!m_detectorClient.prepare(&error)) {
+        m_detectorStatus = error;
+        emit detectorChanged();
+        setSnapshot({"ERROR", error, false, m_snapshot.captureId, true});
+        return false;
+    }
+    m_detectorStatus = "Worker ready";
+    emit detectorChanged();
+    return true;
+}
+
+void AppController::startLiveDetection()
+{
+    if (!m_hudRunning) {
+        startHud();
+        if (!m_hudRunning) return;
+    }
+    if (!prepareDetector()) return;
+    try {
+        m_detectorClient.startLive(m_detectorSettingsStore.settings());
+        m_liveDetection = true;
+        m_detectorStatus = "Live detection running";
+        m_detectorPollTimer.setInterval(qRound(1000.0 / qMax(0.2, m_detectorSettingsStore.liveRate())));
+        m_detectorPollTimer.start();
+        emit detectorChanged();
+    } catch (const std::exception &error) {
+        m_detectorStatus = shortError(error);
+        emit detectorChanged();
+        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+    }
+}
+
+void AppController::stopLiveDetection()
+{
+    m_detectorPollTimer.stop();
+    if (m_liveDetection) {
+        try { m_detectorClient.stopLive(); } catch (const std::exception &error) { m_detectorStatus = shortError(error); }
+    }
+    m_liveDetection = false;
+    m_detectorBoxes.clear();
+    if (m_detectorStatus == "Live detection running") m_detectorStatus = m_detectorSettingsStore.enabled() ? "Worker ready" : "Disabled";
+    emit detectorChanged();
+}
+
+void AppController::toggleDetectorEnabled()
+{
+    if (m_detectorSettingsStore.enabled()) {
+        stopLiveDetection();
+        m_detectorSettingsStore.setEnabled(false);
+        if (m_detectorSettingsStore.save()) {
+            m_detectorStatus = "Disabled";
+        } else {
+            m_detectorStatus = m_detectorSettingsStore.lastError();
+        }
+        emit detectorChanged();
+        return;
+    }
+
+    m_detectorSettingsStore.setEnabled(true);
+    if (!m_detectorSettingsStore.save()) {
+        m_detectorSettingsStore.setEnabled(false);
+        m_detectorStatus = m_detectorSettingsStore.lastError();
+        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+    } else {
+        m_detectorStatus = "Enabled - ready for the next capture";
+    }
+    emit detectorChanged();
+}
+
+void AppController::toggleLiveDetection()
+{
+    if (m_liveDetection) {
+        stopLiveDetection();
+    } else if (!m_detectorSettingsStore.enabled()) {
+        setSnapshot({"ERROR", "Enable the OWLv2 detector before starting live detection.", false, m_snapshot.captureId, true});
+    } else {
+        startLiveDetection();
+    }
+}
+
+void AppController::resumeLiveDetection()
+{
+    if (m_detectorSettingsStore.enabled()) startLiveDetection();
+}
+
+CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings)
 {
     QString retry = "none";
     QString thinking;
@@ -162,9 +290,15 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
     try {
         captureId = CaptureService::imageFingerprint(image);
         QString initial = CaptureService::encodeJpegBase64(image, settings.screenshotMaxEdge, 85);
+        QJsonObject detectorResult;
+        QString detectorContext;
+        if (detectorEnabled) {
+            detectorResult = m_detectorClient.detect(image, detectorSettings);
+            detectorContext = DetectorClient::summary(detectorResult);
+        }
         OllamaReply reply;
         try {
-            reply = m_ollamaService.generateFromImage(settings, initial, memories);
+            reply = m_ollamaService.generateFromImage(settings, initial, memories, detectorContext);
         } catch (const OllamaException &error) {
             thinking = error.thinking();
             if (!OllamaService::isContextLimitError(error.what())) {
@@ -173,7 +307,7 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
             retry = "compact screenshot";
             const QString compact = CaptureService::encodeJpegBase64(image, 768, 70);
             try {
-                reply = m_ollamaService.generateFromImage(settings, compact, memories);
+                reply = m_ollamaService.generateFromImage(settings, compact, memories, detectorContext);
             } catch (const OllamaException &retryError) {
                 thinking = retryError.thinking();
                 if (OllamaService::isContextLimitError(retryError.what())) {
@@ -200,11 +334,11 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
             reply.promptEvalDurationNs,
             reply.evalDurationNs,
         }, settings);
-        return {{"ANSWER", reply.answer, false, captureId, false}, reply.answer, memoryImageB64, settings};
+        return {{"ANSWER", reply.answer, false, captureId, false}, reply.answer, memoryImageB64, settings, detectorResult, false};
     } catch (const std::exception &error) {
         const QString message = shortError(error);
         ChatLogService::write({captureId, settings.query, memories, {}, message, retry, thinking}, settings);
-        return {{"ERROR", message, false, captureId, true}, {}, {}, settings};
+        return {{"ERROR", message, false, captureId, true}, {}, {}, settings, {}, false};
     }
 }
 
@@ -214,7 +348,7 @@ void AppController::setSnapshot(const RuntimeSnapshot &snapshot)
     emit snapshotChanged();
 }
 
-void AppController::runAsyncRequest()
+void AppController::runAsyncRequest(bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings)
 {
     setSnapshot({"CAPTURING", "Capturing primary monitor.", true, m_snapshot.captureId, false});
     const HudSettings settings = m_settingsStore.settings();
@@ -226,8 +360,8 @@ void AppController::runAsyncRequest()
         overlayWindow->hide();
     }
 
-    QTimer::singleShot(80, this, [this, settings, memories, restoreOverlay] {
-        captureOnGuiThread(settings, memories);
+    QTimer::singleShot(80, this, [this, settings, memories, restoreOverlay, resumeLive, detectorEnabled, detectorSettings] {
+        captureOnGuiThread(settings, memories, resumeLive, detectorEnabled, detectorSettings);
         if (restoreOverlay && m_overlay) {
             if (auto *overlayWindow = qobject_cast<QQuickWindow *>(m_overlay.data())) {
                 overlayWindow->show();
@@ -238,7 +372,7 @@ void AppController::runAsyncRequest()
     });
 }
 
-void AppController::captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories)
+void AppController::captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories, bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings)
 {
     QImage image;
     try {
@@ -249,9 +383,39 @@ void AppController::captureOnGuiThread(const HudSettings &settings, const QList<
     }
 
     setSnapshot({"ASKING", "Sending screenshot to Ollama.", true, m_snapshot.captureId, false});
-    m_requestWatcher.setFuture(QtConcurrent::run([this, image, settings, memories] {
-        return runCaptureRequest(image, settings, memories);
+    m_requestWatcher.setFuture(QtConcurrent::run([this, image, settings, memories, resumeLive, detectorEnabled, detectorSettings] {
+        CaptureRequestResult result = runCaptureRequest(image, settings, memories, detectorEnabled, detectorSettings);
+        result.resumeLive = resumeLive;
+        return result;
     }));
+}
+
+void AppController::updateDetectorBoxes(const QJsonObject &result)
+{
+    const QJsonObject capture = result.value("capture").toObject();
+    const double captureWidth = qMax(1.0, capture.value("width").toDouble());
+    const double captureHeight = qMax(1.0, capture.value("height").toDouble());
+    QScreen *screen = QGuiApplication::primaryScreen();
+    const QRect geometry = screen ? screen->geometry() : QRect(0, 0, static_cast<int>(captureWidth), static_cast<int>(captureHeight));
+    const double scaleX = geometry.width() / captureWidth;
+    const double scaleY = geometry.height() / captureHeight;
+    QVariantList boxes;
+    for (const QJsonValue &value : result.value("detections").toArray()) {
+        const QJsonObject detection = value.toObject(); const QJsonArray box = detection.value("box").toArray(); if (box.size() != 4) continue;
+        const QString label = DetectorClient::displayLabel(detection);
+        boxes.append(QVariantMap{{"x", geometry.x() + box.at(0).toDouble() * scaleX}, {"y", geometry.y() + box.at(1).toDouble() * scaleY}, {"width", (box.at(2).toDouble() - box.at(0).toDouble()) * scaleX}, {"height", (box.at(3).toDouble() - box.at(1).toDouble()) * scaleY}, {"label", label}, {"score", detection.value("score").toDouble()}, {"source", detection.value("source").toString()}});
+    }
+    m_detectorBoxes = boxes;
+    const QJsonObject runtime = result.value("runtime").toObject();
+    const double ms = result.value("latency").toObject().value("total_ms").toDouble();
+    m_detectorStatus = QStringLiteral("%1 boxes | %2 %3 | %4 ms").arg(boxes.size()).arg(runtime.value("device").toString()).arg(runtime.value("dtype").toString()).arg(QString::number(ms, 'f', 0));
+    emit detectorChanged();
+}
+
+void AppController::pollDetectorLive()
+{
+    if (!m_liveDetection) return;
+    try { updateDetectorBoxes(m_detectorClient.latestLive()); } catch (const std::exception &error) { m_detectorStatus = shortError(error); emit detectorChanged(); }
 }
 
 void AppController::ensureOverlay()
@@ -265,10 +429,13 @@ void AppController::ensureOverlay()
         engine->rootContext()->setContextProperty("appController", this);
         engine->addImportPath("qrc:/qt/qml");
         engine->addImportPath("qrc:/native/qml");
+#ifdef OLLAMA_HUD_HOT_RELOAD
+        engine->addImportPath(QStringLiteral(OLLAMA_HUD_QML_SOURCE_DIR));
+#endif
     }
     QQmlComponent component(engine, this);
 #ifdef OLLAMA_HUD_HOT_RELOAD
-    component.loadUrl(QUrl::fromLocalFile(QStringLiteral(PROJECT_SOURCE_DIR "/native/qml/OllamaHud/Overlay.qml")));
+    component.loadUrl(QUrl::fromLocalFile(QStringLiteral(OLLAMA_HUD_QML_SOURCE_DIR "/OllamaHud/Overlay.qml")));
 #else
     component.loadFromModule("OllamaHud", "Overlay");
 #endif
@@ -309,6 +476,22 @@ void AppController::pollHotkeys()
         const KeyboardShortcut triggerShortcut = parseShortcut(settings.triggerShortcut);
         if (!m_snapshot.active && latchedPress(triggerShortcut, m_triggerArmed)) {
             captureOnce();
+        }
+        const KeyboardShortcut simulationStopShortcut = parseShortcut(settings.simulationStopShortcut);
+        if (m_inputSimulation.running() && latchedPress(simulationStopShortcut, m_simulationStopArmed)) {
+            m_inputSimulation.stop(QStringLiteral("Emergency stop"));
+        }
+        const KeyboardShortcut simulationTriggerShortcut = parseShortcut(settings.simulationTriggerShortcut);
+        if (latchedPress(simulationTriggerShortcut, m_simulationTriggerArmed)) {
+            m_inputSimulation.start(simulationTriggerShortcut);
+        }
+        const KeyboardShortcut detectorToggleShortcut = parseShortcut(settings.detectorToggleShortcut);
+        if (latchedPress(detectorToggleShortcut, m_detectorToggleArmed)) {
+            toggleDetectorEnabled();
+        }
+        const KeyboardShortcut liveDetectionToggleShortcut = parseShortcut(settings.liveDetectionToggleShortcut);
+        if (latchedPress(liveDetectionToggleShortcut, m_liveDetectionToggleArmed)) {
+            toggleLiveDetection();
         }
     } catch (const std::exception &error) {
         setSnapshot({"ERROR", shortError(error), false, m_snapshot.captureId, true});

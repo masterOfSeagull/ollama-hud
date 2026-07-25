@@ -10,6 +10,10 @@ struct HudSettings
     QString triggerShortcut = "Alt+1";
     QString exitShortcut = "Esc";
     QString clearShortcut = "Alt+2";
+    QString simulationTriggerShortcut = "Alt+3";
+    QString simulationStopShortcut = "Alt+4";
+    QString detectorToggleShortcut = "Alt+5";
+    QString liveDetectionToggleShortcut = "Alt+6";
     int screenshotMaxEdge = 1280;
     double timeoutSeconds = 120.0;
     int memoryQaPairs = 3;
@@ -38,6 +42,10 @@ class SettingsStore : public QObject
     Q_PROPERTY(QString triggerShortcut READ triggerShortcut WRITE setTriggerShortcut NOTIFY settingsChanged)
     Q_PROPERTY(QString exitShortcut READ exitShortcut WRITE setExitShortcut NOTIFY settingsChanged)
     Q_PROPERTY(QString clearShortcut READ clearShortcut WRITE setClearShortcut NOTIFY settingsChanged)
+    Q_PROPERTY(QString simulationTriggerShortcut READ simulationTriggerShortcut WRITE setSimulationTriggerShortcut NOTIFY settingsChanged)
+    Q_PROPERTY(QString simulationStopShortcut READ simulationStopShortcut WRITE setSimulationStopShortcut NOTIFY settingsChanged)
+    Q_PROPERTY(QString detectorToggleShortcut READ detectorToggleShortcut WRITE setDetectorToggleShortcut NOTIFY settingsChanged)
+    Q_PROPERTY(QString liveDetectionToggleShortcut READ liveDetectionToggleShortcut WRITE setLiveDetectionToggleShortcut NOTIFY settingsChanged)
     Q_PROPERTY(int screenshotMaxEdge READ screenshotMaxEdge WRITE setScreenshotMaxEdge NOTIFY settingsChanged)
     Q_PROPERTY(double timeoutSeconds READ timeoutSeconds WRITE setTimeoutSeconds NOTIFY settingsChanged)
     Q_PROPERTY(int memoryQaPairs READ memoryQaPairs WRITE setMemoryQaPairs NOTIFY settingsChanged)
@@ -84,6 +92,14 @@ public:
     void setExitShortcut(const QString &value);
     QString clearShortcut() const;
     void setClearShortcut(const QString &value);
+    QString simulationTriggerShortcut() const;
+    void setSimulationTriggerShortcut(const QString &value);
+    QString simulationStopShortcut() const;
+    void setSimulationStopShortcut(const QString &value);
+    QString detectorToggleShortcut() const;
+    void setDetectorToggleShortcut(const QString &value);
+    QString liveDetectionToggleShortcut() const;
+    void setLiveDetectionToggleShortcut(const QString &value);
     int screenshotMaxEdge() const;
     void setScreenshotMaxEdge(int value);
     double timeoutSeconds() const;

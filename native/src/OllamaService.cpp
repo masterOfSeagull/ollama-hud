@@ -233,9 +233,13 @@ QString OllamaService::checkServer(const HudSettings &settings)
     return "Ollama server is reachable.";
 }
 
-OllamaReply OllamaService::generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories)
+OllamaReply OllamaService::generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories, const QString &detectorContext)
 {
-    const QJsonObject data = postChat(settings, buildChatPayload(settings, imageB64, memories));
+    HudSettings grounded = settings;
+    if (!detectorContext.trimmed().isEmpty()) {
+        grounded.query += QStringLiteral("\n\nUse this structured detector context together with the screenshot; do not invent detections:\n%1").arg(detectorContext);
+    }
+    const QJsonObject data = postChat(grounded, buildChatPayload(grounded, imageB64, memories));
     return replyFromResponse(data);
 }
 

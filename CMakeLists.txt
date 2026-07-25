@@ -20,6 +20,10 @@ set(OLLAMA_HUD_SOURCES
     native/src/AppController.cpp
     native/src/CaptureService.cpp
     native/src/ChatLogService.cpp
+    native/src/DetectorClient.cpp
+    native/src/DetectorSettingsStore.cpp
+    native/src/HotReloadController.cpp
+    native/src/InputSimulationService.cpp
     native/src/OllamaService.cpp
     native/src/SettingsStore.cpp
     native/src/Shortcut.cpp
@@ -29,6 +33,10 @@ set(OLLAMA_HUD_HEADERS
     native/src/AppController.h
     native/src/CaptureService.h
     native/src/ChatLogService.h
+    native/src/DetectorClient.h
+    native/src/DetectorSettingsStore.h
+    native/src/HotReloadController.h
+    native/src/InputSimulationService.h
     native/src/OllamaService.h
     native/src/SettingsStore.h
     native/src/Shortcut.h
@@ -40,15 +48,28 @@ qt_add_executable(OllamaHud
     ${OLLAMA_HUD_HEADERS}
 )
 
+# Keep the hot-reload Debug executable visually distinct.  The branded icon is
+# embedded only in the normal Release executable used by run.bat and packaging.
+if(WIN32)
+    target_sources(OllamaHud PRIVATE
+        $<$<CONFIG:Release>:${CMAKE_CURRENT_SOURCE_DIR}/native/resources/OllamaHudRelease.rc>
+    )
+endif()
+
 target_include_directories(OllamaHud PRIVATE native/src)
 target_compile_definitions(OllamaHud PRIVATE
     APP_VERSION="${PROJECT_VERSION}"
     PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    $<$<CONFIG:Release>:OLLAMA_HUD_RELEASE_BRANDING>
 )
 
 set(OLLAMA_HUD_QML_MODULE_OPTIONS)
 if(OLLAMA_HUD_HOT_RELOAD)
-    target_compile_definitions(OllamaHud PRIVATE QT_QML_DEBUG OLLAMA_HUD_HOT_RELOAD)
+    target_compile_definitions(OllamaHud PRIVATE
+        QT_QML_DEBUG
+        OLLAMA_HUD_HOT_RELOAD
+        OLLAMA_HUD_QML_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/native/qml\"
+    )
     list(APPEND OLLAMA_HUD_QML_MODULE_OPTIONS NO_CACHEGEN)
 endif()
 
@@ -74,14 +95,14 @@ qt_add_qml_module(OllamaHud
         native/qml/OllamaHud/Overlay.qml
 )
 
-file(GLOB_RECURSE GENYDL_QML_RESOURCE_FILES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/native/qml/GenyDL/*"
+file(GLOB_RECURSE OLLAMA_HUD_UI_QML_RESOURCE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/native/qml/OllamaHud/UI/*"
 )
 
-qt_add_resources(OllamaHud GenyDLQmlResources
+qt_add_resources(OllamaHud OllamaHudUiQmlResources
     PREFIX /
     BASE "${CMAKE_CURRENT_SOURCE_DIR}"
-    FILES ${GENYDL_QML_RESOURCE_FILES}
+    FILES ${OLLAMA_HUD_UI_QML_RESOURCE_FILES}
 )
 
 file(GLOB_RECURSE GENYDL_ASSET_RESOURCE_FILES CONFIGURE_DEPENDS
@@ -92,6 +113,12 @@ qt_add_resources(OllamaHud GenyDLAssetResources
     PREFIX /
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/genydl"
     FILES ${GENYDL_ASSET_RESOURCE_FILES}
+)
+
+qt_add_resources(OllamaHud OllamaHudBrandResources
+    PREFIX /
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}"
+    FILES packaging/ollama-hud-release.png
 )
 
 install(TARGETS OllamaHud RUNTIME DESTINATION .)
@@ -115,6 +142,7 @@ if(OLLAMA_HUD_BUILD_TESTS)
     qt_add_qml_module(ollama_hud_native_tests
         URI OllamaHud
         VERSION 1.0
+        ${OLLAMA_HUD_QML_MODULE_OPTIONS}
         OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test_qml/OllamaHud"
         QML_FILES
             native/qml/OllamaHud/Main.qml
@@ -125,6 +153,13 @@ if(OLLAMA_HUD_BUILD_TESTS)
         APP_VERSION="${PROJECT_VERSION}"
         PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
+    if(OLLAMA_HUD_HOT_RELOAD)
+        target_compile_definitions(ollama_hud_native_tests PRIVATE
+            QT_QML_DEBUG
+            OLLAMA_HUD_HOT_RELOAD
+            OLLAMA_HUD_QML_SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/native/qml\"
+        )
+    endif()
     target_link_libraries(ollama_hud_native_tests PRIVATE
         Qt6::Core
         Qt6::Gui
@@ -138,10 +173,10 @@ if(OLLAMA_HUD_BUILD_TESTS)
     if(WIN32)
         target_link_libraries(ollama_hud_native_tests PRIVATE user32)
     endif()
-    qt_add_resources(ollama_hud_native_tests GenyDLQmlTestResources
+    qt_add_resources(ollama_hud_native_tests OllamaHudUiQmlTestResources
         PREFIX /
         BASE "${CMAKE_CURRENT_SOURCE_DIR}"
-        FILES ${GENYDL_QML_RESOURCE_FILES}
+        FILES ${OLLAMA_HUD_UI_QML_RESOURCE_FILES}
     )
     qt_add_resources(ollama_hud_native_tests GenyDLAssetTestResources
         PREFIX /

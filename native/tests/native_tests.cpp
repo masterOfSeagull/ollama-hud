@@ -1,10 +1,17 @@
 #include "AppController.h"
 #include "ChatLogService.h"
+#include "DetectorClient.h"
+#include "DetectorSettingsStore.h"
+#include "HotReloadController.h"
+#include "InputSimulationService.h"
 #include "OllamaService.h"
 #include "SettingsStore.h"
 #include "Shortcut.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -14,6 +21,45 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <deque>
+
+namespace {
+class FakeInputBackend final : public InputSimulationBackend
+{
+public:
+    bool sendKey(int key, bool pressed) override
+    {
+        events.append({key, pressed});
+        ++calls;
+        return calls != failAt;
+    }
+    QVector<QPair<int, bool>> events;
+    int calls = 0;
+    int failAt = -1;
+};
+
+class FakeInputRandom final : public InputSimulationRandom
+{
+public:
+    double uniform(double minimum, double maximum) override { return take(uniforms, (minimum + maximum) / 2.0); }
+    double normal(double mean, double) override { return take(normals, mean); }
+    double generalizedNormal(double mean, double, double) override { return take(generalized, mean); }
+
+    std::deque<double> uniforms;
+    std::deque<double> normals;
+    std::deque<double> generalized;
+
+private:
+    static double take(std::deque<double> &values, double fallback)
+    {
+        if (values.empty()) return fallback;
+        const double value = values.front();
+        values.pop_front();
+        return value;
+    }
+};
+}
+
 class NativeTests : public QObject
 {
     Q_OBJECT
@@ -21,13 +67,20 @@ class NativeTests : public QObject
 private slots:
     void settingsLoadSaveValidation();
     void chatPayloadGeneration();
+    void detectorSettingsAndContext();
+    void detectorTargetRowEditing();
+    void detectorSettingsImportExport();
     void chatLogIncludesCompletionMetadata();
     void memorySelectionCollapsesDuplicates();
     void shortcutParsing();
+    void inputSimulationSequenceAndCleanup();
+    void inputSimulationFailureCleansUp();
     void hudCollapseTogglesWithoutDiscardingText();
     void qmlOverlayLoads();
     void qmlOverlayModuleLoads();
     void qmlMainLoads();
+    void qmlUiResourcesAreAdopted();
+    void hotReloadRecreatesSingleton();
 };
 
 void NativeTests::settingsLoadSaveValidation()
@@ -41,6 +94,8 @@ model: test-model
 trigger_shortcut: Alt+`
 exit_shortcut: Ctrl+`
 clear_shortcut: Alt+2
+simulation_trigger_shortcut: Alt+3
+simulation_stop_shortcut: Alt+4
 screenshot_max_edge: 512
 timeout_seconds: 3
 memory_qa_pairs: 2
@@ -60,6 +115,8 @@ options:
     QCOMPARE(settings.model, QString("test-model"));
     QCOMPARE(settings.memoryQaPairs, 2);
     QCOMPARE(settings.screenshotContext, QString("Use the newest image."));
+    QCOMPARE(settings.simulationTriggerShortcut, QString("Alt+3"));
+    QCOMPARE(settings.simulationStopShortcut, QString("Alt+4"));
     QCOMPARE(settings.think, false);
     QCOMPARE(settings.options.value("num_ctx").toInt(), 4096);
 
@@ -75,6 +132,9 @@ options:
 
     HudSettings invalid;
     invalid.host = "";
+    QVERIFY_THROWS_EXCEPTION(std::invalid_argument, SettingsStore::validate(invalid));
+    invalid = HudSettings {};
+    invalid.simulationStopShortcut = invalid.simulationTriggerShortcut;
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, SettingsStore::validate(invalid));
 
     const QString savedPath = dir.filePath("saved.yaml");
@@ -112,6 +172,97 @@ void NativeTests::chatPayloadGeneration()
     QCOMPARE(messages.at(1).toObject().value("content").toString(), QString("Recent question"));
 }
 
+void NativeTests::detectorSettingsAndContext()
+{
+    DetectorSettings settings;
+    QVERIFY(settings.enabled == false);
+    QVERIFY(QJsonDocument::fromJson(settings.targetsJson.toUtf8()).isArray());
+    const QJsonObject result{{"detections", QJsonArray{QJsonObject{{"target", "Entrance"}, {"matched_prompt", "portal"}, {"source", "guides"}, {"score", 0.8}, {"raw_logit", 0.8}, {"box", QJsonArray{1, 2, 3, 4}}}}}};
+    const QString context = DetectorClient::summary(result);
+    QVERIFY(context.contains("Entrance:portal"));
+    QVERIFY(context.contains("raw logit 0.800"));
+    const QJsonObject guidedDetection{{"target", "Entrance"}, {"source", "guides"}, {"guide", "C:\\guides\\Entrance\\variants\\portal.png"}};
+    QCOMPARE(DetectorClient::displayLabel(guidedDetection), QString("Entrance:variants/portal.png"));
+    HudSettings hud;
+    hud.query += "\n\nUse this structured detector context together with the screenshot; do not invent detections:\n" + context;
+    const QJsonArray messages = OllamaService::buildChatPayload(hud, "image", {}).value("messages").toArray();
+    QVERIFY(messages.last().toObject().value("content").toString().contains("OWLv2 detector results"));
+}
+
+void NativeTests::detectorTargetRowEditing()
+{
+    DetectorSettingsStore store;
+    const int initialCount = store.targets().size();
+    store.addTextTarget();
+    QCOMPARE(store.targets().size(), initialCount + 1);
+    const int index = store.targets().size() - 1;
+    QVERIFY(!store.save());
+    QVERIFY(store.lastError().contains("name"));
+    store.updateTextTarget(index, "Portal", "gate, doorway");
+    const QVariantMap target = store.targets().at(index).toMap();
+    QCOMPARE(target.value("name").toString(), QString("Portal"));
+    QCOMPARE(target.value("prompts").toString(), QString("gate, doorway"));
+    QCOMPARE(target.value("type").toString(), QString("text"));
+    store.removeTarget(index);
+    QCOMPARE(store.targets().size(), initialCount);
+
+    store.addTextTarget();
+    const int thresholdIndex = store.targets().size() - 1;
+    store.updateTextTarget(thresholdIndex, "Portal", "entrance:1.2");
+    QVERIFY(!store.save());
+    QVERIFY(store.lastError().contains("threshold"));
+    store.removeTarget(thresholdIndex);
+
+    store.addImageTarget();
+    const int imageIndex = store.targets().size() - 1;
+    store.updateImageTarget(imageIndex, "Portal images", false, "C:/guides/Portal/positive", "C:/guides/Portal/negative");
+    const QVariantMap imageTarget = store.targets().at(imageIndex).toMap();
+    QCOMPARE(imageTarget.value("type").toString(), QString("image"));
+    QVERIFY(!imageTarget.value("useDefaultGuideDirectories").toBool());
+    QCOMPARE(imageTarget.value("positiveGuideDir").toString(), QString("C:/guides/Portal/positive"));
+    QCOMPARE(imageTarget.value("negativeGuideDir").toString(), QString("C:/guides/Portal/negative"));
+    QVERIFY(!store.save());
+    QVERIFY(store.lastError().contains("positive guide folder"));
+    store.removeTarget(imageIndex);
+
+    QTemporaryDir guideRoot;
+    QVERIFY(guideRoot.isValid());
+    const QString nestedGuideDirectory = guideRoot.filePath("Portal/variants");
+    QVERIFY(QDir().mkpath(nestedGuideDirectory));
+    QFile guideFile(QDir(nestedGuideDirectory).filePath("example.png"));
+    QVERIFY(guideFile.open(QIODevice::WriteOnly));
+    guideFile.write("discovery-only test image");
+    guideFile.close();
+    store.setPositiveGuideFolder(guideRoot.path());
+    QCOMPARE(store.defaultGuideTargetNames(), QStringList{"Portal"});
+}
+
+void NativeTests::detectorSettingsImportExport()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("detector-snapshot.json");
+    DetectorSettingsStore source;
+    source.setModel("snapshot-model");
+    source.setTextThreshold(0.35);
+    source.updateTextTarget(0, "Snapshot target", "entrance:0.3, portal:0.6");
+    QVERIFY(source.saveToFile(path));
+    QCOMPARE(DetectorSettingsStore().settingsFolder().toLocalFile(), QFileInfo(DetectorSettingsStore::configPath()).absolutePath());
+
+    DetectorSettingsStore loaded;
+    QVERIFY(loaded.loadFromFile(path));
+    QCOMPARE(loaded.model(), QString("snapshot-model"));
+    QCOMPARE(loaded.textThreshold(), 0.35);
+    QCOMPARE(loaded.targets().first().toMap().value("prompts").toString(), QString("entrance:0.3, portal:0.6"));
+
+    QFile invalid(path);
+    QVERIFY(invalid.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    invalid.write("not JSON");
+    invalid.close();
+    QVERIFY(!loaded.loadFromFile(path));
+    QCOMPARE(loaded.model(), QString("snapshot-model"));
+}
+
 void NativeTests::chatLogIncludesCompletionMetadata()
 {
     QTemporaryDir dir;
@@ -146,6 +297,61 @@ void NativeTests::shortcutParsing()
     QCOMPARE(parseShortcut("Alt+`").display(), QString("Alt+`"));
     QCOMPARE(parseShortcut("control+escape").display(), QString("Ctrl+Esc"));
     QVERIFY_THROWS_EXCEPTION(std::invalid_argument, parseShortcut("Alt+1+2"));
+}
+
+void NativeTests::inputSimulationSequenceAndCleanup()
+{
+    auto backend = std::make_unique<FakeInputBackend>();
+    auto *recordingBackend = backend.get();
+    auto random = std::make_unique<FakeInputRandom>();
+    random->uniforms = {0.51, 0.0, 0.05}; // Left, t1, r1
+    random->normals = {1.0, 5.0, 0.2, 0.2}; // t2, t3, first two t4 values
+    random->generalized = {0.4, 0.1, 0.052}; // t6, t5, t7
+    InputSimulationService service(std::move(backend), std::move(random));
+
+    service.startImmediatelyForTest();
+    service.advanceForTest(0); // release horizontal and launch all three branches
+    const QPair<int, bool> leftDown(0x25, true);
+    const QPair<int, bool> leftUp(0x25, false);
+    const QPair<int, bool> upDown(0x26, true);
+    const QPair<int, bool> fDown(0x46, true);
+    const QPair<int, bool> shiftDown(0xA0, true);
+    const QPair<int, bool> upUp(0x26, false);
+    const QPair<int, bool> shiftUp(0xA0, false);
+    QCOMPARE(recordingBackend->events.at(0), leftDown);
+    QCOMPARE(recordingBackend->events.at(1), leftUp);
+    QCOMPARE(recordingBackend->events.at(2), upDown);
+
+    service.advanceForTest(200);
+    QVERIFY(recordingBackend->events.contains(fDown));
+    service.advanceForTest(200);
+    QVERIFY(recordingBackend->events.contains(shiftDown));
+    QVERIFY(service.running());
+
+    service.stop(QStringLiteral("test stop"));
+    QVERIFY(!service.running());
+    QVERIFY(recordingBackend->events.contains(upUp));
+    QVERIFY(recordingBackend->events.contains(shiftUp));
+}
+
+void NativeTests::inputSimulationFailureCleansUp()
+{
+    auto backend = std::make_unique<FakeInputBackend>();
+    auto *recordingBackend = backend.get();
+    auto random = std::make_unique<FakeInputRandom>();
+    random->uniforms = {0.51, 0.0, 0.05};
+    random->normals = {1.0, 5.0, 0.2};
+    random->generalized = {0.4};
+    recordingBackend->failAt = 4; // Left down/up, Up down, then F down fails.
+    InputSimulationService service(std::move(backend), std::move(random));
+
+    service.startImmediatelyForTest();
+    service.advanceForTest(0);
+    service.advanceForTest(200);
+    QVERIFY(!service.running());
+    QVERIFY(service.status().startsWith("Failed:"));
+    const QPair<int, bool> upUp(0x26, false);
+    QVERIFY(recordingBackend->events.contains(upUp));
 }
 
 void NativeTests::hudCollapseTogglesWithoutDiscardingText()
@@ -198,14 +404,60 @@ void NativeTests::qmlMainLoads()
     engine.addImportPath(QStringLiteral(PROJECT_SOURCE_DIR) + "/native/qml");
     AppController controller;
     engine.rootContext()->setContextProperty("appController", &controller);
+    engine.rootContext()->setContextProperty("hotReloadEnabled", false);
     QQmlComponent component(&engine, QUrl::fromLocalFile(QStringLiteral(PROJECT_SOURCE_DIR) + "/native/qml/OllamaHud/Main.qml"));
     QObject *object = component.create();
     QVERIFY2(object, qPrintable(component.errorString()));
     delete object;
 }
 
+void NativeTests::qmlUiResourcesAreAdopted()
+{
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/qmldir"));
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/Colors.qml"));
+    QVERIFY(!QFile::exists(":/native/qml/GenyDL/qmldir"));
+}
+
+void NativeTests::hotReloadRecreatesSingleton()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString moduleDirectory = dir.filePath("Test/Ui");
+    QVERIFY(QDir().mkpath(moduleDirectory));
+
+    auto writeFile = [](const QString &path, const QByteArray &contents) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            return false;
+        }
+        return file.write(contents) == contents.size();
+    };
+    QVERIFY(writeFile(moduleDirectory + "/qmldir", "module Test.Ui\nsingleton Palette 1.0 Palette.qml\n"));
+    QVERIFY(writeFile(moduleDirectory + "/Palette.qml", "pragma Singleton\nimport QtQml\nQtObject { readonly property string value: \"initial\" }\n"));
+    const QString rootPath = dir.filePath("ReloadRoot.qml");
+    QVERIFY(writeFile(rootPath, "import QtQml\nimport Test.Ui\nQtObject { property string observed: Palette.value }\n"));
+
+    QQmlApplicationEngine engine;
+    engine.addImportPath(dir.path());
+    const QUrl rootUrl = QUrl::fromLocalFile(rootPath);
+    engine.load(rootUrl);
+    QCOMPARE(engine.rootObjects().size(), 1);
+    QCOMPARE(engine.rootObjects().constFirst()->property("observed").toString(), QString("initial"));
+
+    QVERIFY(writeFile(moduleDirectory + "/Palette.qml", "pragma Singleton\nimport QtQml\nQtObject { readonly property string value: \"updated\" }\n"));
+    HotReloadController controller(&engine, rootUrl);
+    QSignalSpy succeeded(&controller, &HotReloadController::reloadSucceeded);
+    QSignalSpy failed(&controller, &HotReloadController::reloadFailed);
+    controller.reload();
+    QTRY_COMPARE(succeeded.count(), 1);
+    QCOMPARE(failed.count(), 0);
+    QCOMPARE(engine.rootObjects().size(), 1);
+    QCOMPARE(engine.rootObjects().constFirst()->property("observed").toString(), QString("updated"));
+}
+
 int main(int argc, char **argv)
 {
+    qputenv("QML_DISABLE_DISK_CACHE", "1");
     QQuickStyle::setStyle("Basic");
     QGuiApplication app(argc, argv);
     NativeTests tests;

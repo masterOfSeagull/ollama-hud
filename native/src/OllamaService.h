@@ -68,7 +68,7 @@ public:
     static bool isContextLimitError(const QString &message);
 
     QString checkServer(const HudSettings &settings);
-    OllamaReply generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories);
+    OllamaReply generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories, const QString &detectorContext = {});
     OllamaReply testModel(const HudSettings &settings);
 
 private:
