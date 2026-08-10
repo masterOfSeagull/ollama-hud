@@ -66,7 +66,9 @@ class NativeTests : public QObject
 
 private slots:
     void settingsLoadSaveValidation();
+    void promptSettingsImportExport();
     void chatPayloadGeneration();
+    void koreanTranslationPayloadIsIndependent();
     void detectorSettingsAndContext();
     void detectorTargetRowEditing();
     void detectorSettingsImportExport();
@@ -144,6 +146,36 @@ options:
     QCOMPARE(reloaded.query, QString("Where now?"));
 }
 
+void NativeTests::promptSettingsImportExport()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("prompt-profile.yaml");
+
+    SettingsStore source;
+    source.setInstruction("Use concise directions.");
+    source.setScreenshotContext("Trust only the current frame.");
+    source.setQuery("Which doorway is next?");
+    QVERIFY(source.savePromptToFile(path));
+    QCOMPARE(source.localFilePath(QUrl::fromLocalFile(path)), QDir::fromNativeSeparators(path));
+    QCOMPARE(source.settingsFolder().toLocalFile(), QFileInfo(SettingsStore::userConfigPath()).absolutePath());
+
+    SettingsStore loaded;
+    loaded.setHost("http://127.0.0.1:9999");
+    QVERIFY(loaded.loadPromptFromFile(path));
+    QCOMPARE(loaded.instruction(), QString("Use concise directions."));
+    QCOMPARE(loaded.screenshotContext(), QString("Trust only the current frame."));
+    QCOMPARE(loaded.query(), QString("Which doorway is next?"));
+    QCOMPARE(loaded.host(), QString("http://127.0.0.1:9999"));
+
+    QFile incomplete(path);
+    QVERIFY(incomplete.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate));
+    incomplete.write("instruction: 'Missing the other prompt fields.'\n");
+    incomplete.close();
+    QVERIFY(!loaded.loadPromptFromFile(path));
+    QCOMPARE(loaded.instruction(), QString("Use concise directions."));
+}
+
 void NativeTests::chatPayloadGeneration()
 {
     HudSettings settings;
@@ -172,6 +204,26 @@ void NativeTests::chatPayloadGeneration()
     QCOMPARE(messages.at(1).toObject().value("content").toString(), QString("Recent question"));
 }
 
+void NativeTests::koreanTranslationPayloadIsIndependent()
+{
+    HudSettings settings;
+    settings.model = "translation-model";
+    settings.keepAlive = "5m";
+    settings.think = true;
+    settings.options.insert("temperature", 0.8);
+    const QJsonObject payload = OllamaService::buildKoreanTranslationPayload(settings, "Turn left at the gate.");
+
+    QCOMPARE(payload.value("model").toString(), QString("translation-model"));
+    QCOMPARE(payload.value("think").toBool(), false);
+    QCOMPARE(payload.value("options").toObject().value("temperature").toDouble(), 0.0);
+    const QJsonArray messages = payload.value("messages").toArray();
+    QCOMPARE(messages.size(), 2);
+    QCOMPARE(messages.at(0).toObject().value("role").toString(), QString("system"));
+    QCOMPARE(messages.at(1).toObject().value("role").toString(), QString("user"));
+    QCOMPARE(messages.at(1).toObject().value("content").toString(), QString("Turn left at the gate."));
+    QVERIFY(!messages.at(1).toObject().contains("images"));
+}
+
 void NativeTests::detectorSettingsAndContext()
 {
     DetectorSettings settings;
@@ -197,7 +249,7 @@ void NativeTests::detectorTargetRowEditing()
     QCOMPARE(store.targets().size(), initialCount + 1);
     const int index = store.targets().size() - 1;
     QVERIFY(!store.save());
-    QVERIFY(store.lastError().contains("name"));
+    QVERIFY(store.lastError().contains("이름"));
     store.updateTextTarget(index, "Portal", "gate, doorway");
     const QVariantMap target = store.targets().at(index).toMap();
     QCOMPARE(target.value("name").toString(), QString("Portal"));
@@ -210,7 +262,7 @@ void NativeTests::detectorTargetRowEditing()
     const int thresholdIndex = store.targets().size() - 1;
     store.updateTextTarget(thresholdIndex, "Portal", "entrance:1.2");
     QVERIFY(!store.save());
-    QVERIFY(store.lastError().contains("threshold"));
+    QVERIFY(store.lastError().contains("임계값"));
     store.removeTarget(thresholdIndex);
 
     store.addImageTarget();
@@ -222,7 +274,7 @@ void NativeTests::detectorTargetRowEditing()
     QCOMPARE(imageTarget.value("positiveGuideDir").toString(), QString("C:/guides/Portal/positive"));
     QCOMPARE(imageTarget.value("negativeGuideDir").toString(), QString("C:/guides/Portal/negative"));
     QVERIFY(!store.save());
-    QVERIFY(store.lastError().contains("positive guide folder"));
+    QVERIFY(store.lastError().contains("양성 가이드 폴더"));
     store.removeTarget(imageIndex);
 
     QTemporaryDir guideRoot;
@@ -248,6 +300,8 @@ void NativeTests::detectorSettingsImportExport()
     source.updateTextTarget(0, "Snapshot target", "entrance:0.3, portal:0.6");
     QVERIFY(source.saveToFile(path));
     QCOMPARE(DetectorSettingsStore().settingsFolder().toLocalFile(), QFileInfo(DetectorSettingsStore::configPath()).absolutePath());
+    QCOMPARE(source.localFilePath(QUrl::fromLocalFile(path)), QDir::fromNativeSeparators(path));
+    QVERIFY(source.localFilePath(QUrl("https://example.com/detector-settings.json")).isEmpty());
 
     DetectorSettingsStore loaded;
     QVERIFY(loaded.loadFromFile(path));
@@ -349,7 +403,7 @@ void NativeTests::inputSimulationFailureCleansUp()
     service.advanceForTest(0);
     service.advanceForTest(200);
     QVERIFY(!service.running());
-    QVERIFY(service.status().startsWith("Failed:"));
+    QVERIFY(service.status().startsWith("실패:"));
     const QPair<int, bool> upUp(0x26, false);
     QVERIFY(recordingBackend->events.contains(upUp));
 }
@@ -357,13 +411,15 @@ void NativeTests::inputSimulationFailureCleansUp()
 void NativeTests::hudCollapseTogglesWithoutDiscardingText()
 {
     AppController controller;
+    QVERIFY(controller.sessionLogEntries().isEmpty());
+    QVERIFY(!controller.openSessionScreenshot(SettingsStore::chatLogPath()));
     QSignalSpy spy(&controller, &AppController::hudCollapsedChanged);
     const QString originalMessage = controller.message();
 
     controller.toggleHudCollapsed();
     QCOMPARE(spy.count(), 1);
     QVERIFY(controller.hudCollapsed());
-    QCOMPARE(controller.state(), QString("READY"));
+    QCOMPARE(controller.state(), QString("준비"));
     QCOMPARE(controller.message(), originalMessage);
 
     controller.toggleHudCollapsed();
@@ -415,6 +471,10 @@ void NativeTests::qmlUiResourcesAreAdopted()
 {
     QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/qmldir"));
     QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/Colors.qml"));
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/fonts/Pretendard-Regular.otf"));
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/fonts/Pretendard-Medium.otf"));
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/fonts/Pretendard-SemiBold.otf"));
+    QVERIFY(QFile::exists(":/native/qml/OllamaHud/UI/fonts/Pretendard-Bold.otf"));
     QVERIFY(!QFile::exists(":/native/qml/GenyDL/qmldir"));
 }
 

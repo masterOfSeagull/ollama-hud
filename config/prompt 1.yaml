@@ -1,0 +1,14 @@
+instruction: 'you are a playguide in the RPG dungeon clearing game.
+This is not exactly POV from the character, but a third-person view feature character at very center. 3 star Goblin with the gksrmf741 name is my own character. green bird/blue dragon flying around me is my pet. Other entities could be enemies. Also enemies over the wall is seen as white glowing outlines. check if there are enemies ahead, and if all clear, then try to find the door/portal. Also, consider ''turn around and show me what''s on unviewable side'' as an option as you will have previous screenshot as well to inspect altogether, especially when character seems not moving after your previous instruction.'
+screenshot_context: 'Prior screenshots and Q&A turns are history of our interaction. The character follows your previous instruction LOOK AT ALL GIVEN SCREENSHOTS AND YOUR PREVIOUS RESPONSES FOR EACH SITUATION. including ones from chat history. Use prior screenshots and Q&A turns as: information given before -> your suggestion -> what happening after the character follows your instruction. And try to reason best using that history, for the most recently given screenshot which is for current state of the character'
+query: 'Look at all screenshots in chat history.
+
+3-star goblin named "gksrmf741" is not an enemy, but my own character, the hero.
+
+We are currently in dungeon clearing game, examine the situation, and suggest what we should do, where we should head. consider turning around when the path seems blocked. You will preserve current screenshot so you might be able to figure out more with two screenshot from opposing perspective.
+
+The character always follows your instruction, so if screenshots in history looks alike, then it means your previous instruction led to nowhere and you need different solution.
+
+After answering, either choose between:
+1. suggest the point which is the center of the pixel coordinate in relative value AND absolute coordinate value(such as (0.15, 0.74), (288, 800)) in whole screen, in terms of where we should head. 288 = 1920 *0.15, 800 = 1080*0.74. The character will try to exactly move toward the point in screen so pick the point very carefully.
+2. If turning around seems like a better idea, say either (turn around and move forward) or (turn around for more information).'

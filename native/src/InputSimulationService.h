@@ -40,7 +40,7 @@ public:
     bool running() const;
     QString status() const;
     void start(const KeyboardShortcut &activationShortcut);
-    void stop(const QString &reason = QStringLiteral("Stopped"));
+    void stop(const QString &reason = QStringLiteral("중지됨"));
 
     // Test hooks: the production path is driven by the elapsed timer and shortcut state.
     void startImmediatelyForTest();
@@ -78,7 +78,7 @@ private:
     KeyboardShortcut m_activationShortcut;
     QSet<int> m_heldKeys;
     QVector<QPair<qint64, Event>> m_events;
-    QString m_status = QStringLiteral("Idle");
+    QString m_status = QStringLiteral("대기 중");
     bool m_running = false;
     bool m_waitingForRelease = false;
     bool m_testClock = false;

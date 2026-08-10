@@ -252,6 +252,16 @@ QString SettingsStore::chatLogPath()
     return QDir(projectRoot()).filePath("logs/chat.log");
 }
 
+QUrl SettingsStore::settingsFolder() const
+{
+    return QUrl::fromLocalFile(QFileInfo(userConfigPath()).absolutePath());
+}
+
+QString SettingsStore::localFilePath(const QUrl &url) const
+{
+    return url.isLocalFile() ? QDir::fromNativeSeparators(url.toLocalFile()) : QString{};
+}
+
 HudSettings SettingsStore::loadFromPath(const QString &path)
 {
     const QString selectedPath = path.isEmpty()
@@ -296,7 +306,7 @@ void SettingsStore::saveToPath(const HudSettings &settings, const QString &path)
     QDir().mkpath(QFileInfo(selectedPath).absolutePath());
     QFile file(selectedPath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-        throw std::runtime_error(QStringLiteral("Could not write settings: %1").arg(selectedPath).toStdString());
+        throw std::runtime_error(QStringLiteral("설정을 쓸 수 없습니다: %1").arg(selectedPath).toStdString());
     }
 
     QTextStream out(&file);
@@ -327,10 +337,10 @@ void SettingsStore::saveToPath(const HudSettings &settings, const QString &path)
 void SettingsStore::validate(const HudSettings &settings)
 {
     if (settings.host.trimmed().isEmpty()) {
-        throw std::invalid_argument("Ollama host is required.");
+        throw std::invalid_argument("Ollama 호스트가 필요합니다.");
     }
     if (settings.model.trimmed().isEmpty()) {
-        throw std::invalid_argument("Model is required.");
+        throw std::invalid_argument("모델이 필요합니다.");
     }
     parseShortcut(settings.triggerShortcut);
     parseShortcut(settings.exitShortcut);
@@ -347,27 +357,27 @@ void SettingsStore::validate(const HudSettings &settings)
     QSet<QString> uniqueShortcuts;
     for (const QString &shortcut : shortcuts) {
         if (uniqueShortcuts.contains(shortcut)) {
-            throw std::invalid_argument(QStringLiteral("Shortcut collision: %1").arg(shortcut).toStdString());
+        throw std::invalid_argument(QStringLiteral("단축키 충돌: %1").arg(shortcut).toStdString());
         }
         uniqueShortcuts.insert(shortcut);
     }
     if (settings.screenshotMaxEdge < 64) {
-        throw std::invalid_argument("Screenshot max edge must be at least 64.");
+        throw std::invalid_argument("스크린샷 최대 변 길이는 64 이상이어야 합니다.");
     }
     if (settings.timeoutSeconds < 1) {
-        throw std::invalid_argument("Timeout seconds must be at least 1.");
+        throw std::invalid_argument("시간 제한은 1초 이상이어야 합니다.");
     }
     if (settings.memoryQaPairs < 0 || settings.memoryQaPairs > 20) {
-        throw std::invalid_argument("Q/A memory pairs must be between 0 and 20.");
+        throw std::invalid_argument("질문/답변 메모리 쌍은 0~20개여야 합니다.");
     }
     if (settings.instruction.trimmed().isEmpty()) {
-        throw std::invalid_argument("Instruction is required.");
+        throw std::invalid_argument("지시문이 필요합니다.");
     }
     if (settings.query.trimmed().isEmpty()) {
-        throw std::invalid_argument("Query is required.");
+        throw std::invalid_argument("질문이 필요합니다.");
     }
     if (settings.keepAlive.trimmed().isEmpty()) {
-        throw std::invalid_argument("Keep alive is required.");
+        throw std::invalid_argument("유지 시간이 필요합니다.");
     }
 }
 
@@ -396,6 +406,57 @@ bool SettingsStore::save()
     try {
         m_settings.options = optionsFromText(optionsText(), m_settings.options);
         saveToPath(m_settings);
+        setLastError({});
+        return true;
+    } catch (const std::exception &error) {
+        setLastError(error.what());
+        return false;
+    }
+}
+
+bool SettingsStore::savePromptToFile(const QString &path)
+{
+    try {
+        const QString selectedPath = path.trimmed();
+        if (selectedPath.isEmpty()) {
+            throw std::invalid_argument("프롬프트 설정 파일을 선택하세요.");
+        }
+        validate(m_settings);
+        QDir().mkpath(QFileInfo(selectedPath).absolutePath());
+        QFile file(selectedPath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+            throw std::runtime_error(QStringLiteral("프롬프트 설정을 쓸 수 없습니다: %1").arg(selectedPath).toStdString());
+        }
+        QTextStream out(&file);
+        out.setEncoding(QStringConverter::Utf8);
+        out << "instruction: " << quoteYaml(m_settings.instruction) << "\n";
+        out << "screenshot_context: " << quoteYaml(m_settings.screenshotContext) << "\n";
+        out << "query: " << quoteYaml(m_settings.query) << "\n";
+        setLastError({});
+        return true;
+    } catch (const std::exception &error) {
+        setLastError(error.what());
+        return false;
+    }
+}
+
+bool SettingsStore::loadPromptFromFile(const QString &path)
+{
+    try {
+        const QString selectedPath = path.trimmed();
+        if (selectedPath.isEmpty()) {
+            throw std::invalid_argument("프롬프트 설정 파일을 선택하세요.");
+        }
+        const QVariantMap data = readYamlLike(selectedPath);
+        if (!data.contains("instruction") || !data.contains("screenshot_context") || !data.contains("query")) {
+            throw std::invalid_argument("프롬프트 설정에는 instruction, screenshot_context 및 query가 있어야 합니다.");
+        }
+        HudSettings loaded = m_settings;
+        loaded.instruction = data.value("instruction").toString();
+        loaded.screenshotContext = data.value("screenshot_context").toString();
+        loaded.query = data.value("query").toString();
+        validate(loaded);
+        setSettings(loaded);
         setLastError({});
         return true;
     } catch (const std::exception &error) {

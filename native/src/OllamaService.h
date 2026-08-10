@@ -58,6 +58,7 @@ public:
         const QString &imageB64,
         const QList<ChatMemory> &memories,
         int maxMemories = -1);
+    static QJsonObject buildKoreanTranslationPayload(const HudSettings &settings, const QString &sourceText);
     static QList<ChatMemory> selectPromptMemories(const QList<ChatMemory> &memories, int maxMemories);
     static QString buildMessagePreview(
         const QString &query,
@@ -69,6 +70,7 @@ public:
 
     QString checkServer(const HudSettings &settings);
     OllamaReply generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories, const QString &detectorContext = {});
+    OllamaReply translateToKorean(const HudSettings &settings, const QString &sourceText);
     OllamaReply testModel(const HudSettings &settings);
 
 private:

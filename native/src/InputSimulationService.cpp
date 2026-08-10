@@ -126,7 +126,7 @@ InputSimulationService::InputSimulationService(std::unique_ptr<InputSimulationBa
 
 InputSimulationService::~InputSimulationService()
 {
-    stop(QStringLiteral("Destroyed"));
+    stop(QStringLiteral("종료됨"));
 }
 
 bool InputSimulationService::running() const { return m_running; }
@@ -143,7 +143,7 @@ void InputSimulationService::start(const KeyboardShortcut &activationShortcut)
     m_running = true;
     m_waitingForRelease = true;
     m_clock.restart();
-    setStatus(QStringLiteral("Waiting for %1 release").arg(activationShortcut.display()));
+    setStatus(QStringLiteral("%1 키를 놓는 중").arg(activationShortcut.display()));
     log(QStringLiteral("activation received; waiting for shortcut release"));
     m_timer.start();
 }
@@ -237,7 +237,7 @@ void InputSimulationService::beginSequence(qint64 now)
     if (!keyDown(m_horizontalKey)) {
         return;
     }
-    setStatus(QStringLiteral("Running input simulation"));
+    setStatus(QStringLiteral("입력 시뮬레이션 실행 중"));
     const qint64 t1 = secondsToMilliseconds(m_random->uniform(0.0, 1.54));
     schedule(Event::HorizontalUp, t1);
     log(QStringLiteral("started horizontal=%1 t1=%2ms").arg(m_horizontalKey == vkLeft ? "Left" : "Right").arg(t1));
@@ -359,7 +359,7 @@ double InputSimulationService::boundedGeneralizedNormal(double mean, double stan
 bool InputSimulationService::keyDown(int virtualKey)
 {
     if (!m_backend->sendKey(virtualKey, true)) {
-        fail(QStringLiteral("Input injection failed while pressing virtual key %1").arg(virtualKey));
+        fail(QStringLiteral("가상 키 %1을(를) 누르는 입력 주입에 실패했습니다").arg(virtualKey));
         return false;
     }
     m_heldKeys.insert(virtualKey);
@@ -372,7 +372,7 @@ bool InputSimulationService::keyUp(int virtualKey)
         return true;
     }
     if (!m_backend->sendKey(virtualKey, false)) {
-        fail(QStringLiteral("Input injection failed while releasing virtual key %1").arg(virtualKey));
+        fail(QStringLiteral("가상 키 %1을(를) 놓는 입력 주입에 실패했습니다").arg(virtualKey));
         return false;
     }
     m_heldKeys.remove(virtualKey);
@@ -395,7 +395,7 @@ void InputSimulationService::completeIfDone()
     if (m_upDone && m_fDone && m_shiftDone) {
         m_timer.stop();
         m_running = false;
-        setStatus(QStringLiteral("Complete"));
+        setStatus(QStringLiteral("완료"));
         log(QStringLiteral("complete"));
     }
 }
@@ -408,7 +408,7 @@ void InputSimulationService::fail(const QString &message)
     releaseAll();
     m_running = false;
     m_waitingForRelease = false;
-    setStatus(QStringLiteral("Failed: %1").arg(message));
+    setStatus(QStringLiteral("실패: %1").arg(message));
 }
 
 void InputSimulationService::setStatus(const QString &status)

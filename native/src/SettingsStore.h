@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QUrl>
 #include <QVariantMap>
 
 struct HudSettings
@@ -63,6 +64,7 @@ class SettingsStore : public QObject
     Q_PROPERTY(QString temperature READ temperature WRITE setTemperature NOTIFY settingsChanged)
     Q_PROPERTY(QString topP READ topP WRITE setTopP NOTIFY settingsChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(QUrl settingsFolder READ settingsFolder CONSTANT)
 
 public:
     explicit SettingsStore(QObject *parent = nullptr);
@@ -80,7 +82,11 @@ public:
 
     Q_INVOKABLE bool load();
     Q_INVOKABLE bool save();
+    Q_INVOKABLE bool savePromptToFile(const QString &path);
+    Q_INVOKABLE bool loadPromptFromFile(const QString &path);
     Q_INVOKABLE bool resetToDefaults();
+    Q_INVOKABLE QString localFilePath(const QUrl &url) const;
+    QUrl settingsFolder() const;
 
     QString host() const;
     void setHost(const QString &value);

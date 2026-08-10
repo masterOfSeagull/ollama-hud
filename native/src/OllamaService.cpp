@@ -52,13 +52,13 @@ OllamaReply replyFromResponse(const QJsonObject &data, bool allowEmptyAnswer = f
 {
     const QJsonObject message = data.value("message").toObject();
     if (message.isEmpty()) {
-        throw OllamaException("Ollama did not return a chat message.");
+        throw OllamaException("Ollama가 대화 메시지를 반환하지 않았습니다.");
     }
     const QString thinking = oneLine(message.value("thinking").toString());
     const QString answer = oneLine(message.value("content").toString());
     if (answer.isEmpty()) {
         if (!allowEmptyAnswer) {
-            throw OllamaException("Ollama returned an empty response.", 0, thinking);
+            throw OllamaException("Ollama가 빈 응답을 반환했습니다.", 0, thinking);
         }
     }
     return {
@@ -161,6 +161,26 @@ QJsonObject OllamaService::buildChatPayload(
     };
 }
 
+QJsonObject OllamaService::buildKoreanTranslationPayload(const HudSettings &settings, const QString &sourceText)
+{
+    QJsonObject options;
+    for (auto it = settings.options.constBegin(); it != settings.options.constEnd(); ++it) {
+        options.insert(it.key(), QJsonValue::fromVariant(it.value()));
+    }
+    options.insert("temperature", 0);
+    return {
+        {"model", settings.model},
+        {"messages", QJsonArray{
+            QJsonObject{{"role", "system"}, {"content", "Translate the user's text into natural Korean. Return only the Korean translation; do not add commentary, explanations, or labels."}},
+            QJsonObject{{"role", "user"}, {"content", sourceText}},
+        }},
+        {"stream", false},
+        {"think", false},
+        {"keep_alive", settings.keepAlive},
+        {"options", options},
+    };
+}
+
 QString OllamaService::buildMessagePreview(
     const QString &query,
     const QString &instruction,
@@ -224,13 +244,13 @@ QString OllamaService::checkServer(const HudSettings &settings)
     const QString replyErrorString = reply->errorString();
     reply->deleteLater();
     if (error != QNetworkReply::NoError) {
-        throw OllamaException(QStringLiteral("Could not reach Ollama at %1: %2").arg(settings.host, replyErrorString));
+        throw OllamaException(QStringLiteral("Ollama에 연결할 수 없습니다 (%1): %2").arg(settings.host, replyErrorString));
     }
     if (status >= 400) {
-        throw OllamaException(QStringLiteral("Ollama returned HTTP %1 from /api/tags.").arg(status), status);
+        throw OllamaException(QStringLiteral("Ollama가 /api/tags에서 HTTP %1을 반환했습니다.").arg(status), status);
     }
     Q_UNUSED(body);
-    return "Ollama server is reachable.";
+    return "Ollama 서버에 연결할 수 있습니다.";
 }
 
 OllamaReply OllamaService::generateFromImage(const HudSettings &settings, const QString &imageB64, const QList<ChatMemory> &memories, const QString &detectorContext)
@@ -241,6 +261,11 @@ OllamaReply OllamaService::generateFromImage(const HudSettings &settings, const 
     }
     const QJsonObject data = postChat(grounded, buildChatPayload(grounded, imageB64, memories));
     return replyFromResponse(data);
+}
+
+OllamaReply OllamaService::translateToKorean(const HudSettings &settings, const QString &sourceText)
+{
+    return replyFromResponse(postChat(settings, buildKoreanTranslationPayload(settings, sourceText)));
 }
 
 OllamaReply OllamaService::testModel(const HudSettings &settings)
@@ -292,7 +317,7 @@ QJsonObject OllamaService::postChat(const HudSettings &settings, const QJsonObje
     const QString httpErrorText = status >= 400 ? errorText(reply, body) : QString();
     reply->deleteLater();
     if (networkError != QNetworkReply::NoError) {
-        throw OllamaException(QStringLiteral("Could not reach Ollama at %1: %2").arg(settings.host, networkErrorText));
+        throw OllamaException(QStringLiteral("Ollama에 연결할 수 없습니다 (%1): %2").arg(settings.host, networkErrorText));
     }
     if (status >= 400) {
         throw OllamaException(httpErrorText, status);
@@ -300,7 +325,7 @@ QJsonObject OllamaService::postChat(const HudSettings &settings, const QJsonObje
     QJsonParseError parseError {};
     const QJsonDocument document = QJsonDocument::fromJson(body, &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        throw OllamaException("Ollama returned invalid JSON.");
+        throw OllamaException("Ollama가 올바르지 않은 JSON을 반환했습니다.");
     }
     const QJsonObject object = document.object();
     if (object.contains("error")) {

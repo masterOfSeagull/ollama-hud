@@ -12,13 +12,14 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QVariantList>
 #include <exception>
 
 struct RuntimeSnapshot
 {
-    QString state = "READY";
+    QString state = "준비";
     QString message;
     bool active = false;
     QString captureId;
@@ -33,6 +34,8 @@ struct CaptureRequestResult
     HudSettings settings;
     QJsonObject detectorResult;
     bool resumeLive = false;
+    QVariantMap sessionLogEntry;
+    QString koreanTranslation;
 };
 
 class AppController : public QObject
@@ -43,6 +46,7 @@ class AppController : public QObject
     Q_PROPERTY(QString state READ state NOTIFY snapshotChanged)
     Q_PROPERTY(QString message READ message NOTIFY snapshotChanged)
     Q_PROPERTY(QString visualAnswer READ visualAnswer NOTIFY snapshotChanged)
+    Q_PROPERTY(QString koreanTranslation READ koreanTranslation NOTIFY snapshotChanged)
     Q_PROPERTY(QString captureId READ captureId NOTIFY snapshotChanged)
     Q_PROPERTY(bool active READ active NOTIFY snapshotChanged)
     Q_PROPERTY(bool hudCollapsed READ hudCollapsed NOTIFY hudCollapsedChanged)
@@ -53,6 +57,7 @@ class AppController : public QObject
     Q_PROPERTY(QString detectorStatus READ detectorStatus NOTIFY detectorChanged)
     Q_PROPERTY(bool liveDetection READ liveDetection NOTIFY detectorChanged)
     Q_PROPERTY(QVariantList detectorBoxes READ detectorBoxes NOTIFY detectorChanged)
+    Q_PROPERTY(QVariantList sessionLogEntries READ sessionLogEntries NOTIFY sessionLogChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -63,6 +68,7 @@ public:
     QString state() const;
     QString message() const;
     QString visualAnswer() const;
+    QString koreanTranslation() const;
     QString captureId() const;
     bool active() const;
     bool hudCollapsed() const;
@@ -73,6 +79,7 @@ public:
     QString detectorStatus() const;
     bool liveDetection() const;
     QVariantList detectorBoxes() const;
+    QVariantList sessionLogEntries() const;
 
     Q_INVOKABLE void startHud();
     Q_INVOKABLE void stopHud();
@@ -86,6 +93,8 @@ public:
     Q_INVOKABLE void stopLiveDetection();
     Q_INVOKABLE void toggleDetectorEnabled();
     Q_INVOKABLE void toggleLiveDetection();
+    Q_INVOKABLE bool openLogFolder();
+    Q_INVOKABLE bool openSessionScreenshot(const QString &path);
 
 signals:
     void snapshotChanged();
@@ -94,9 +103,10 @@ signals:
     void transientMessage(const QString &message);
     void simulationChanged();
     void detectorChanged();
+    void sessionLogChanged();
 
 private:
-    CaptureRequestResult runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings);
+    CaptureRequestResult runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings, const QString &sessionCaptureDirectory);
     void setSnapshot(const RuntimeSnapshot &snapshot);
     void runAsyncRequest(bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings);
     void captureOnGuiThread(const HudSettings &settings, const QList<ChatMemory> &memories, bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings);
@@ -116,6 +126,7 @@ private:
     DetectorClient m_detectorClient;
     InputSimulationService m_inputSimulation;
     RuntimeSnapshot m_snapshot;
+    QString m_koreanTranslation;
     QList<ChatMemory> m_memories;
     QTimer m_hotkeyTimer;
     QTimer m_detectorPollTimer;
@@ -130,6 +141,8 @@ private:
     bool m_detectorToggleArmed = true;
     bool m_liveDetectionToggleArmed = true;
     bool m_liveDetection = false;
-    QString m_detectorStatus = "Disabled";
+    QString m_detectorStatus = "사용 안 함";
     QVariantList m_detectorBoxes;
+    QVariantList m_sessionLogEntries;
+    QTemporaryDir m_sessionCaptureDirectory;
 };

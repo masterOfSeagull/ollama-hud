@@ -58,26 +58,26 @@ Item {
 
     FontLoader {
         id: contentFontThin
-        source: "qrc:/resources/fonts/Inter-Thin.ttf"
+        source: "fonts/Pretendard-Regular.otf"
     }
 
     FontLoader {
         id: contentFontRegular
-        source: "qrc:/resources/fonts/Inter-Regular.ttf"
+        source: "fonts/Pretendard-Regular.otf"
     }
 
     FontLoader {
         id: contentFontMedium
-        source: "qrc:/resources/fonts/Inter-Medium.ttf"
+        source: "fonts/Pretendard-Medium.otf"
     }
 
     FontLoader {
         id: contentFontSemiBold
-        source: "qrc:/resources/fonts/Inter-SemiBold.ttf"
+        source: "fonts/Pretendard-SemiBold.otf"
     }
 
     FontLoader {
         id: contentFontBold
-        source: "qrc:/resources/fonts/Inter-Bold.ttf"
+        source: "fonts/Pretendard-Bold.otf"
     }
 }

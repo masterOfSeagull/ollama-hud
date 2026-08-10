@@ -72,7 +72,7 @@ ApplicationWindow {
                         Layout.leftMargin: 13
                         Layout.topMargin: 10
 
-                        text: appController.hudRunning ? "Overlay running" : "Control panel"
+                        text: appController.hudRunning ? "오버레이 실행 중" : "제어판"
                         color: appController.hudRunning ? Colors.success : Colors.textSecondary
                         font.family: FontSystem.getContentFontBold.name
                         font.pixelSize: Typography.t2
@@ -93,7 +93,7 @@ ApplicationWindow {
                     }
 
                     Repeater {
-                        model: ["Runtime", "Prompt", "Settings", "Detector", "Log"]
+                        model: ["실행 상태", "프롬프트", "설정", "감지기", "로그"]
                         delegate: Rectangle {
                             Layout.fillWidth: true
                             Layout.topMargin: 5
@@ -176,7 +176,7 @@ ApplicationWindow {
                         }
                         HoverHandler { id: themeToggleHover }
                         ToolTip.visible: themeToggleHover.hovered
-                        ToolTip.text: Colors.lightMode ? "Switch to dark theme" : "Switch to light theme"
+                        ToolTip.text: Colors.lightMode ? "어두운 테마로 전환" : "밝은 테마로 전환"
                         ToolTip.delay: 500
                     }
 
@@ -219,18 +219,18 @@ ApplicationWindow {
                         }
 
                         Controls.Button {
-                            text: appController.hudRunning ? "Stop HUD" : "Start HUD"
+                            text: appController.hudRunning ? "HUD 중지" : "HUD 시작"
                             isDefault: true
                             style: appController.hudRunning ? "danger" : "success"
                             onClicked: appController.hudRunning ? appController.stopHud() : appController.startHud()
                         }
                         Controls.Button {
-                            text: appController.active ? "Working" : "Ask Now"
+                            text: appController.active ? "처리 중" : "지금 질문"
                             enabled: !appController.active
                             onClicked: appController.captureOnce()
                         }
                         Controls.Button {
-                            text: "Test"
+                            text: "연결 테스트"
                             enabled: !appController.active
                             onClicked: appController.testOllama()
                         }
@@ -263,9 +263,9 @@ ApplicationWindow {
                                 RuntimeCard {
                                     Layout.fillWidth: true
                                     expanded: true
-                                    title: "Runtime"
-                                    body: appController.visualAnswer.length > 0 ? appController.visualAnswer : "Ready for the next trigger."
-                                    foot: "Trigger " + appController.settingsStore.triggerShortcut + "  |  Sim " + appController.settingsStore.simulationTriggerShortcut + " / stop " + appController.settingsStore.simulationStopShortcut + "  |  Exit " + appController.settingsStore.exitShortcut
+                                    title: "실행 상태"
+                                    body: appController.visualAnswer.length > 0 ? appController.visualAnswer : "다음 실행 트리거를 기다리고 있습니다."
+                                    foot: "실행 " + appController.settingsStore.triggerShortcut + "  |  시뮬레이션 " + appController.settingsStore.simulationTriggerShortcut + " / 중지 " + appController.settingsStore.simulationStopShortcut + "  |  HUD 중지 " + appController.settingsStore.exitShortcut
                                     stateColor: appController.error ? Colors.error : (appController.active ? Colors.warning : Colors.success)
                                 }
 
@@ -276,31 +276,31 @@ ApplicationWindow {
                                     RuntimeCard {
                                         Layout.fillWidth: true
                                         implicitHeight: 126
-                                        title: "Model"
+                                        title: "모델"
                                         body: appController.settingsStore.model
                                         foot: appController.settingsStore.host
                                     }
                                     RuntimeCard {
                                         Layout.fillWidth: true
                                         implicitHeight: 126
-                                        title: "Input simulation"
-                                        body: appController.simulationRunning ? "Running" : appController.simulationStatus
-                                        foot: "Start " + appController.settingsStore.simulationTriggerShortcut + "  |  Stop " + appController.settingsStore.simulationStopShortcut
+                                        title: "입력 시뮬레이션"
+                                        body: appController.simulationRunning ? "실행 중" : appController.simulationStatus
+                                        foot: "시작 " + appController.settingsStore.simulationTriggerShortcut + "  |  중지 " + appController.settingsStore.simulationStopShortcut
                                         stateColor: appController.simulationRunning ? Colors.warning : Colors.success
                                     }
                                     RuntimeCard {
                                         Layout.fillWidth: true
                                         implicitHeight: 126
-                                        title: "Capture"
-                                        body: appController.captureId.length > 0 ? appController.captureId : "No capture yet"
-                                        foot: "Max edge " + appController.settingsStore.screenshotMaxEdge + " px"
+                                        title: "캡처"
+                                        body: appController.captureId.length > 0 ? appController.captureId : "아직 캡처가 없습니다"
+                                        foot: "최대 변 길이 " + appController.settingsStore.screenshotMaxEdge + " px"
                                     }
                                     RuntimeCard {
                                         Layout.fillWidth: true
                                         implicitHeight: 126
-                                        title: "Memory"
-                                        body: appController.settingsStore.memoryQaPairs + " Q/A pairs"
-                                        foot: appController.settingsStore.think ? "Thinking enabled" : "Thinking disabled"
+                                        title: "메모리"
+                                        body: appController.settingsStore.memoryQaPairs + "개 질문/답변 쌍"
+                                        foot: appController.settingsStore.think ? "사고 모드 사용" : "사고 모드 사용 안 함"
                                     }
                                 }
                             }
@@ -335,13 +335,180 @@ ApplicationWindow {
                                 spacing: 12
                                 RuntimeCard {
                                     Layout.fillWidth: true
-                                    title: "Chat Log"
-                                    body: "Text-only request history is appended to logs/chat.log."
-                                    foot: "Screenshot payloads are omitted from the log."
+                                    title: "대화 로그"
+                                    body: appController.sessionLogEntries.length === 1
+                                        ? "이 세션에서 요청 1개를 캡처했습니다."
+                                        : "이 세션에서 요청 " + appController.sessionLogEntries.length + "개를 캡처했습니다."
+                                    foot: "영구 기록은 logs/chat.log에 텍스트만 저장됩니다. 세션 스크린샷은 Ollama HUD를 종료하면 삭제됩니다."
                                 }
-                                Controls.Button {
-                                    text: "Toggle HUD Collapse"
-                                    onClicked: appController.toggleHudCollapsed()
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Controls.Button {
+                                        text: "로그 폴더 열기"
+                                        isDefault: true
+                                        onClicked: appController.openLogFolder()
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    visible: appController.sessionLogEntries.length === 0
+                                    radius: 8
+                                    color: Colors.backgroundActivated
+                                    border.width: 1
+                                    border.color: Colors.borderActivated
+                                    implicitHeight: 96
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        width: parent.width - 36
+                                        text: "이 세션에는 아직 질문/답변 기록이 없습니다. 새 캡처는 임시 스크린샷 미리보기와 함께 여기에 표시됩니다."
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        color: Colors.textMuted
+                                        font.pixelSize: Typography.t2
+                                    }
+                                }
+
+                                Repeater {
+                                    model: appController.sessionLogEntries
+
+                                    delegate: Rectangle {
+                                        id: sessionEntryCard
+                                        required property int index
+                                        required property var modelData
+                                        property bool expanded: false
+
+                                        Layout.fillWidth: true
+                                        radius: 8
+                                        color: Colors.backgroundActivated
+                                        border.width: 1
+                                        border.color: modelData.isError ? Colors.error : Colors.borderActivated
+                                        implicitHeight: sessionEntryContent.implicitHeight + 32
+
+                                        ColumnLayout {
+                                            id: sessionEntryContent
+                                            anchors.fill: parent
+                                            anchors.margins: 16
+                                            spacing: 10
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: modelData.timestamp + "  |  " + (modelData.captureId.length > 0 ? modelData.captureId : "캡처 없음")
+                                                    color: Colors.textSecondary
+                                                    font.pixelSize: Typography.t3
+                                                    font.family: FontSystem.getContentFontSemiBold.name
+                                                }
+                                                Text {
+                                                    text: modelData.isError
+                                                        ? "오류"
+                                                        : "완료: " + (modelData.doneReason.length > 0 ? modelData.doneReason : "알 수 없음")
+                                                    color: modelData.isError ? Colors.error : Colors.success
+                                                    font.pixelSize: Typography.t3
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Layout.alignment: Qt.AlignTop
+                                                spacing: 14
+
+                                                Rectangle {
+                                                    Layout.preferredWidth: 280
+                                                    Layout.preferredHeight: 158
+                                                    Layout.alignment: Qt.AlignTop
+                                                    radius: 7
+                                                    color: Colors.backgroundItemActivated
+                                                    border.width: 1
+                                                    border.color: Colors.borderActivated
+                                                    clip: true
+
+                                                    Image {
+                                                        anchors.fill: parent
+                                                        source: modelData.screenshotUrl
+                                                        fillMode: Image.PreserveAspectFit
+                                                        asynchronous: true
+                                                        cache: false
+                                                        visible: modelData.screenshotUrl.length > 0
+                                                    }
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        width: parent.width - 24
+                                                        visible: modelData.screenshotUrl.length === 0
+                                                        text: "스크린샷 없음"
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        color: Colors.textMuted
+                                                        font.pixelSize: Typography.t3
+                                                    }
+
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        enabled: modelData.screenshotPath.length > 0
+                                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        onClicked: appController.openSessionScreenshot(modelData.screenshotPath)
+                                                    }
+                                                }
+
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    Layout.alignment: Qt.AlignTop
+                                                    spacing: 7
+
+                                                    FieldLabel { text: "질문" }
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: modelData.question
+                                                        wrapMode: Text.WordWrap
+                                                        maximumLineCount: sessionEntryCard.expanded ? 1000 : 4
+                                                        elide: Text.ElideRight
+                                                        color: Colors.textPrimary
+                                                        font.pixelSize: Typography.t2
+                                                    }
+
+                                                    FieldLabel { text: modelData.isError ? "오류" : "답변" }
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: modelData.isError ? modelData.error : modelData.answer
+                                                        wrapMode: Text.WordWrap
+                                                        maximumLineCount: sessionEntryCard.expanded ? 1000 : 7
+                                                        elide: Text.ElideRight
+                                                        color: modelData.isError ? Colors.error : Colors.textPrimary
+                                                        font.pixelSize: Typography.t2
+                                                    }
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        visible: !modelData.isError
+                                                        text: (modelData.generatedTokens >= 0 ? "생성 토큰 " + modelData.generatedTokens + "개" : "토큰 수 없음")
+                                                            + (modelData.totalDurationSeconds >= 0 ? "  |  " + Number(modelData.totalDurationSeconds).toFixed(2) + " s" : "")
+                                                        color: Colors.textMuted
+                                                        font.pixelSize: Typography.t3
+                                                    }
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Controls.Button {
+                                                    text: sessionEntryCard.expanded ? "접기" : "전체 질문/답변 보기"
+                                                    sizeType: "small"
+                                                    onClicked: sessionEntryCard.expanded = !sessionEntryCard.expanded
+                                                }
+                                                Controls.Button {
+                                                    text: "스크린샷 열기"
+                                                    sizeType: "small"
+                                                    enabled: modelData.screenshotPath.length > 0
+                                                    onClicked: appController.openSessionScreenshot(modelData.screenshotPath)
+                                                }
+                                                Item { Layout.fillWidth: true }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -417,9 +584,64 @@ ApplicationWindow {
     component SettingsPage: ScrollView {
         id: settingsScroll
         property bool promptOnly: false
+        property string persistenceMessage: ""
+        property bool persistenceFailed: false
         clip: true
         contentWidth: availableWidth
         contentHeight: settingsContent.implicitHeight + 44
+
+        function showPersistenceResult(success, successMessage) {
+            persistenceFailed = !success
+            persistenceMessage = success
+                ? successMessage
+                : appController.settingsStore.lastError
+        }
+
+        function afterPendingEditCommitted(action) {
+            settingsScroll.forceActiveFocus()
+            Qt.callLater(action)
+        }
+
+        function saveDefaultSettings() {
+            afterPendingEditCommitted(function() {
+                const success = appController.saveSettings()
+                showPersistenceResult(success, promptOnly ? "프롬프트 설정을 저장했습니다." : "설정을 저장했습니다.")
+            })
+        }
+
+        Connections {
+            target: appController.settingsStore
+            function onSettingsChanged() {
+                settingsScroll.persistenceMessage = ""
+            }
+        }
+
+        FileDialog {
+            id: promptSettingsSaveDialog
+            title: "프롬프트 설정 저장"
+            fileMode: FileDialog.SaveFile
+            currentFolder: appController.settingsStore.settingsFolder
+            defaultSuffix: "yaml"
+            nameFilters: ["프롬프트 설정 (*.yaml *.yml)"]
+            onAccepted: {
+                const selectedPath = appController.settingsStore.localFilePath(selectedFile)
+                const success = appController.settingsStore.savePromptToFile(selectedPath)
+                settingsScroll.showPersistenceResult(success, "프롬프트 설정 스냅샷을 저장했습니다.")
+            }
+        }
+
+        FileDialog {
+            id: promptSettingsLoadDialog
+            title: "프롬프트 설정 불러오기"
+            fileMode: FileDialog.OpenFile
+            currentFolder: appController.settingsStore.settingsFolder
+            nameFilters: ["프롬프트 설정 (*.yaml *.yml)"]
+            onAccepted: {
+                const selectedPath = appController.settingsStore.localFilePath(selectedFile)
+                const success = appController.settingsStore.loadPromptFromFile(selectedPath)
+                settingsScroll.showPersistenceResult(success, "프롬프트 설정을 불러왔습니다.")
+            }
+        }
 
         Item {
             width: settingsScroll.availableWidth
@@ -451,7 +673,7 @@ ApplicationWindow {
                     columnSpacing: 14
 
                         FieldLabel {
-                            text: "Instruction"
+                            text: "지시문"
                             visible: promptOnly
                             Layout.alignment: Qt.AlignTop
                             Layout.topMargin: 10
@@ -484,7 +706,7 @@ ApplicationWindow {
                         }
 
                         FieldLabel {
-                            text: "Screenshot context"
+                            text: "스크린샷 컨텍스트"
                             visible: promptOnly
                             Layout.alignment: Qt.AlignTop
                             Layout.topMargin: 10
@@ -517,7 +739,7 @@ ApplicationWindow {
                         }
 
                         FieldLabel {
-                            text: "Query"
+                            text: "질문"
                             visible: promptOnly
                             Layout.alignment: Qt.AlignTop
                             Layout.topMargin: 10
@@ -549,7 +771,7 @@ ApplicationWindow {
                             }
                         }
 
-                    FieldLabel { text: "Host"; visible: !promptOnly }
+                    FieldLabel { text: "호스트"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 360
                         visible: !promptOnly
@@ -557,7 +779,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.host = text
                     }
 
-                    FieldLabel { text: "Model"; visible: !promptOnly }
+                    FieldLabel { text: "모델"; visible: !promptOnly }
                     Controls.ComboBox {
                         Layout.fillWidth: true
                         visible: !promptOnly
@@ -567,7 +789,7 @@ ApplicationWindow {
                         onActivated: appController.settingsStore.model = modelTextAt(currentIndex)
                     }
 
-                    FieldLabel { text: "Trigger"; visible: !promptOnly }
+                    FieldLabel { text: "실행 단축키"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -575,7 +797,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.triggerShortcut = text
                     }
 
-                    FieldLabel { text: "Collapse / expand"; visible: !promptOnly }
+                    FieldLabel { text: "접기 / 펼치기"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -583,7 +805,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.clearShortcut = text
                     }
 
-                    FieldLabel { text: "Exit"; visible: !promptOnly }
+                    FieldLabel { text: "HUD 중지"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -591,7 +813,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.exitShortcut = text
                     }
 
-                    FieldLabel { text: "Simulation trigger"; visible: !promptOnly }
+                    FieldLabel { text: "시뮬레이션 실행"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -599,7 +821,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.simulationTriggerShortcut = text
                     }
 
-                    FieldLabel { text: "Simulation emergency stop"; visible: !promptOnly }
+                    FieldLabel { text: "시뮬레이션 긴급 중지"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -607,7 +829,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.simulationStopShortcut = text
                     }
 
-                    FieldLabel { text: "Detector on / off"; visible: !promptOnly }
+                    FieldLabel { text: "감지기 켜기 / 끄기"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -615,7 +837,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.detectorToggleShortcut = text
                     }
 
-                    FieldLabel { text: "Live detection on / off"; visible: !promptOnly }
+                    FieldLabel { text: "실시간 감지 켜기 / 끄기"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -623,7 +845,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.liveDetectionToggleShortcut = text
                     }
 
-                    FieldLabel { text: "Screenshot max edge"; visible: !promptOnly }
+                    FieldLabel { text: "스크린샷 최대 변 길이"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 140
                         visible: !promptOnly
@@ -633,7 +855,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.screenshotMaxEdge = parseInt(text)
                     }
 
-                    FieldLabel { text: "Memory pairs"; visible: !promptOnly }
+                    FieldLabel { text: "메모리 질문/답변 쌍"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 140
                         visible: !promptOnly
@@ -643,7 +865,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.memoryQaPairs = parseInt(text)
                     }
 
-                    FieldLabel { text: "Keep alive"; visible: !promptOnly }
+                    FieldLabel { text: "유지 시간"; visible: !promptOnly }
                     RowLayout {
                         Layout.preferredWidth: 220
                         visible: !promptOnly
@@ -657,20 +879,20 @@ ApplicationWindow {
                             onEditingFinished: appController.settingsStore.keepAliveMinutes = text
                         }
                         Text {
-                            text: "min"
+                            text: "분"
                             color: Colors.textMuted
                             font.pixelSize: Typography.t3
                         }
                     }
 
-                    FieldLabel { text: "Think"; visible: !promptOnly }
+                    FieldLabel { text: "사고 모드"; visible: !promptOnly }
                     Controls.Switch {
                         visible: !promptOnly
                         checked: appController.settingsStore.think
                         onToggled: appController.settingsStore.think = checked
                     }
 
-                    FieldLabel { text: "Context tokens"; visible: !promptOnly }
+                    FieldLabel { text: "컨텍스트 토큰"; visible: !promptOnly }
                     OptionField {
                         visible: !promptOnly
                         text: appController.settingsStore.numCtx
@@ -678,7 +900,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.numCtx = text
                     }
 
-                    FieldLabel { text: "Max output tokens"; visible: !promptOnly }
+                    FieldLabel { text: "최대 출력 토큰"; visible: !promptOnly }
                     OptionField {
                         visible: !promptOnly
                         text: appController.settingsStore.numPredict
@@ -686,7 +908,7 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.numPredict = text
                     }
 
-                    FieldLabel { text: "Repeat last N"; visible: !promptOnly }
+                    FieldLabel { text: "최근 N개 반복"; visible: !promptOnly }
                     OptionField {
                         visible: !promptOnly
                         text: appController.settingsStore.repeatLastN
@@ -694,14 +916,14 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.repeatLastN = text
                     }
 
-                    FieldLabel { text: "Repeat penalty"; visible: !promptOnly }
+                    FieldLabel { text: "반복 패널티"; visible: !promptOnly }
                     OptionField {
                         visible: !promptOnly
                         text: appController.settingsStore.repeatPenalty
                         onEditingFinished: appController.settingsStore.repeatPenalty = text
                     }
 
-                    FieldLabel { text: "Temperature"; visible: !promptOnly }
+                    FieldLabel { text: "온도"; visible: !promptOnly }
                     OptionField {
                         visible: !promptOnly
                         text: appController.settingsStore.temperature
@@ -720,21 +942,39 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     Controls.Button {
-                        text: "Save"
+                        text: "저장"
                         isDefault: true
-                        onClicked: appController.saveSettings()
+                        onClicked: settingsScroll.saveDefaultSettings()
                     }
                     Controls.Button {
-                        text: "Defaults"
-                        onClicked: appController.settingsStore.resetToDefaults()
+                        text: "다른 이름으로 저장..."
+                        visible: settingsScroll.promptOnly
+                        onClicked: settingsScroll.afterPendingEditCommitted(function() {
+                            promptSettingsSaveDialog.open()
+                        })
+                    }
+                    Controls.Button {
+                        text: "불러오기..."
+                        visible: settingsScroll.promptOnly
+                        onClicked: promptSettingsLoadDialog.open()
+                    }
+                    Controls.Button {
+                        text: "기본값"
+                        onClicked: settingsScroll.afterPendingEditCommitted(function() {
+                            const success = appController.settingsStore.resetToDefaults()
+                            settingsScroll.showPersistenceResult(success, "기본값을 복원했습니다.")
+                        })
                     }
                     Item { Layout.fillWidth: true }
-                    Text {
-                        text: appController.settingsStore.lastError
-                        color: Colors.error
-                        visible: text.length > 0
-                        font.pixelSize: Typography.t3
-                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: settingsScroll.persistenceMessage
+                    color: settingsScroll.persistenceFailed ? Colors.error : Colors.success
+                    visible: text.length > 0
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Typography.t3
                 }
             }
         }
@@ -767,38 +1007,78 @@ ApplicationWindow {
         contentWidth: availableWidth
         contentHeight: detectorContent.implicitHeight + 44
         property int guideTargetIndex: -1
+        property string persistenceMessage: ""
+        property bool persistenceFailed: false
+
+        function showPersistenceResult(success, successMessage) {
+            persistenceFailed = !success
+            persistenceMessage = success
+                ? successMessage
+                : appController.detectorSettingsStore.lastError
+        }
+
+        function afterPendingEditCommitted(action) {
+            // Detector editors update the C++ store from onEditingFinished. Move
+            // focus first, then wait one event turn so the requested action sees
+            // the value that is still being edited when its button is clicked.
+            detectorScroll.forceActiveFocus()
+            Qt.callLater(action)
+        }
+
+        function saveDefaultSettings() {
+            afterPendingEditCommitted(function() {
+                const success = appController.detectorSettingsStore.save()
+                showPersistenceResult(success, "감지기 설정을 저장했습니다.")
+            })
+        }
+
+        Connections {
+            target: appController.detectorSettingsStore
+            function onChanged() {
+                detectorScroll.persistenceMessage = ""
+            }
+        }
 
         FolderDialog {
             id: guideFolderDialog
             property bool positiveFolder: true
-            title: (positiveFolder ? "Choose positive guide folder" : "Choose negative guide folder") + (guideTargetIndex >= 0 ? " for image target" : "")
+            title: (positiveFolder ? "양성 가이드 폴더 선택" : "음성 가이드 폴더 선택") + (guideTargetIndex >= 0 ? " (이미지 대상)" : "")
             onAccepted: {
+                const selectedPath = appController.detectorSettingsStore.localFilePath(selectedFolder)
                 if (guideTargetIndex >= 0)
-                    appController.detectorSettingsStore.setImageTargetGuideFolder(guideTargetIndex, positiveFolder, selectedFolder.toLocalFile())
+                    appController.detectorSettingsStore.setImageTargetGuideFolder(guideTargetIndex, positiveFolder, selectedPath)
                 else if (positiveFolder)
-                    appController.detectorSettingsStore.positiveGuideFolder = selectedFolder.toLocalFile()
+                    appController.detectorSettingsStore.positiveGuideFolder = selectedPath
                 else
-                    appController.detectorSettingsStore.negativeGuideFolder = selectedFolder.toLocalFile()
+                    appController.detectorSettingsStore.negativeGuideFolder = selectedPath
             }
         }
 
         FileDialog {
             id: detectorSettingsSaveDialog
-            title: "Save detector settings"
+            title: "감지기 설정 저장"
             fileMode: FileDialog.SaveFile
             currentFolder: appController.detectorSettingsStore.settingsFolder
             defaultSuffix: "json"
-            nameFilters: ["Detector settings (*.json)"]
-            onAccepted: appController.detectorSettingsStore.saveToFile(selectedFile.toLocalFile())
+            nameFilters: ["감지기 설정 (*.json)"]
+            onAccepted: {
+                const selectedPath = appController.detectorSettingsStore.localFilePath(selectedFile)
+                const success = appController.detectorSettingsStore.saveToFile(selectedPath)
+                detectorScroll.showPersistenceResult(success, "감지기 설정 스냅샷을 저장했습니다.")
+            }
         }
 
         FileDialog {
             id: detectorSettingsLoadDialog
-            title: "Load detector settings"
+            title: "감지기 설정 불러오기"
             fileMode: FileDialog.OpenFile
             currentFolder: appController.detectorSettingsStore.settingsFolder
-            nameFilters: ["Detector settings (*.json)"]
-            onAccepted: appController.detectorSettingsStore.loadFromFile(selectedFile.toLocalFile())
+            nameFilters: ["감지기 설정 (*.json)"]
+            onAccepted: {
+                const selectedPath = appController.detectorSettingsStore.localFilePath(selectedFile)
+                const success = appController.detectorSettingsStore.loadFromFile(selectedPath)
+                detectorScroll.showPersistenceResult(success, "감지기 설정을 불러왔습니다.")
+            }
         }
 
         Item {
@@ -814,9 +1094,9 @@ ApplicationWindow {
 
                 RuntimeCard {
                     Layout.fillWidth: true
-                    title: "OWLv2 detector"
+                    title: "OWLv2 감지기"
                     body: appController.detectorStatus
-                    foot: "Guide scores are raw OWLv2 logits; text scores are confidence values. Detector " + appController.settingsStore.detectorToggleShortcut + " | Live " + appController.settingsStore.liveDetectionToggleShortcut + "."
+                    foot: "가이드 점수는 원시 OWLv2 로짓이고, 텍스트 점수는 신뢰도 값입니다. 감지기 " + appController.settingsStore.detectorToggleShortcut + " | 실시간 " + appController.settingsStore.liveDetectionToggleShortcut + "."
                     stateColor: appController.liveDetection ? Colors.success : (appController.detectorSettingsStore.enabled ? Colors.warning : Colors.textMuted)
                     expanded: true
                 }
@@ -837,44 +1117,44 @@ ApplicationWindow {
                         rowSpacing: 12
                         columnSpacing: 14
 
-                        FieldLabel { text: "Enable ground detector" }
+                        FieldLabel { text: "화면 감지기 사용" }
                         Controls.Switch {
                             checked: appController.detectorSettingsStore.enabled
                             onToggled: appController.detectorSettingsStore.enabled = checked
                         }
-                        FieldLabel { text: "Model" }
+                        FieldLabel { text: "모델" }
                         Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.model; onEditingFinished: appController.detectorSettingsStore.model = text }
-                        FieldLabel { text: "Device / dtype" }
+                        FieldLabel { text: "장치 / 데이터 형식" }
                         RowLayout {
                             Layout.fillWidth: true
                             Controls.ComboBox { Layout.preferredWidth: 130; model: ["auto", "cpu", "cuda"]; currentIndex: Math.max(0, model.indexOf(appController.detectorSettingsStore.device)); onActivated: appController.detectorSettingsStore.device = modelTextAt(currentIndex) }
                             Controls.ComboBox { Layout.preferredWidth: 130; model: ["auto", "float32", "float16", "bfloat16"]; currentIndex: Math.max(0, model.indexOf(appController.detectorSettingsStore.dtype)); onActivated: appController.detectorSettingsStore.dtype = modelTextAt(currentIndex) }
                         }
-                        FieldLabel { text: "Text threshold" }
+                        FieldLabel { text: "텍스트 임계값" }
                         OptionField { text: appController.detectorSettingsStore.textThreshold; onEditingFinished: appController.detectorSettingsStore.textThreshold = parseFloat(text) }
-                        FieldLabel { text: "Guide threshold (raw logit)" }
+                        FieldLabel { text: "가이드 임계값 (원시 로짓)" }
                         OptionField { text: appController.detectorSettingsStore.guideThreshold; onEditingFinished: appController.detectorSettingsStore.guideThreshold = parseFloat(text) }
-                        FieldLabel { text: "Positive guide folder" }
+                        FieldLabel { text: "양성 가이드 폴더" }
                         RowLayout {
                             Layout.fillWidth: true
                             Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.positiveGuideFolder; onEditingFinished: appController.detectorSettingsStore.positiveGuideFolder = text }
-                            Controls.Button { text: "Browse"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
+                            Controls.Button { text: "찾아보기"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
                         }
-                        FieldLabel { text: "Negative guide folder" }
+                        FieldLabel { text: "음성 가이드 폴더" }
                         RowLayout {
                             Layout.fillWidth: true
                             Controls.TextField { Layout.fillWidth: true; text: appController.detectorSettingsStore.negativeGuideFolder; onEditingFinished: appController.detectorSettingsStore.negativeGuideFolder = text }
-                            Controls.Button { text: "Browse"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
+                            Controls.Button { text: "찾아보기"; onClicked: { detectorScroll.guideTargetIndex = -1; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
                         }
-                        FieldLabel { text: "Live detection rate (Hz)" }
+                        FieldLabel { text: "실시간 감지 빈도 (Hz)" }
                         OptionField { text: appController.detectorSettingsStore.liveRate; onEditingFinished: appController.detectorSettingsStore.liveRate = parseFloat(text) }
-                        FieldLabel { text: "Targets"; Layout.alignment: Qt.AlignTop; Layout.topMargin: 10 }
+                        FieldLabel { text: "대상"; Layout.alignment: Qt.AlignTop; Layout.topMargin: 10 }
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 8
                             Text {
                                 Layout.fillWidth: true
-                                text: "Text prompts may have their own threshold, for example entrance:0.3, portal:0.6; prompts without :threshold use the global text threshold. Image targets use positive and optional negative image sets; default folders are searched recursively at positive guide folder/Target name/ and negative guide folder/Target name/."
+                                text: "텍스트 프롬프트에는 자체 임계값을 지정할 수 있습니다. 예: entrance:0.3, portal:0.6. :임계값이 없는 프롬프트에는 전역 텍스트 임계값이 적용됩니다. 이미지 대상은 양성 이미지 세트와 선택적 음성 이미지 세트를 사용하며, 기본 폴더에서는 양성 가이드 폴더/대상 이름/ 및 음성 가이드 폴더/대상 이름/을 재귀적으로 검색합니다."
                                 wrapMode: Text.WordWrap
                                 color: Colors.textMuted
                                 font.pixelSize: Typography.t3
@@ -895,10 +1175,10 @@ ApplicationWindow {
                                         anchors.fill: parent
                                         anchors.margins: 11
                                         spacing: 7
-                                        Text { text: modelData.type === "image" ? "Image target" : "Text target"; color: Colors.textSecondary; font.pixelSize: Typography.t3; font.bold: true }
+                                        Text { text: modelData.type === "image" ? "이미지 대상" : "텍스트 대상"; color: Colors.textSecondary; font.pixelSize: Typography.t3; font.bold: true }
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            FieldLabel { text: modelData.type === "image" && useDefaultGuideDirectories.checked ? "Search for target" : "Target name" }
+                                            FieldLabel { text: modelData.type === "image" && useDefaultGuideDirectories.checked ? "대상 검색" : "대상 이름" }
                                             Controls.TextField {
                                                 id: textNameField
                                                 Layout.fillWidth: true
@@ -921,12 +1201,12 @@ ApplicationWindow {
                                                 currentIndex: appController.detectorSettingsStore.defaultGuideTargetIndex(modelData.name)
                                                 onActivated: appController.detectorSettingsStore.updateImageTarget(index, modelTextAt(currentIndex), true, positiveGuideDir.text, negativeGuideDir.text)
                                             }
-                                            Controls.Button { text: "Remove"; onClicked: appController.detectorSettingsStore.removeTarget(index) }
+                                            Controls.Button { text: "삭제"; onClicked: appController.detectorSettingsStore.removeTarget(index) }
                                         }
                                         RowLayout {
                                             Layout.fillWidth: true
                                             visible: modelData.type !== "image"
-                                            FieldLabel { text: "Prompts (optional :threshold)" }
+                                            FieldLabel { text: "프롬프트 (:임계값 선택)" }
                                             Controls.TextField {
                                                 id: textPromptsField
                                                 Layout.fillWidth: true
@@ -938,14 +1218,14 @@ ApplicationWindow {
                                         Controls.CheckBox {
                                             id: useDefaultGuideDirectories
                                             visible: modelData.type === "image"
-                                            text: "Use default guide image-set directories"
+                                            text: "기본 가이드 이미지 세트 폴더 사용"
                                             checked: modelData.useDefaultGuideDirectories
                                             onToggled: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, checked, positiveGuideDir.text, negativeGuideDir.text)
                                         }
                                         Text {
                                             Layout.fillWidth: true
                                             visible: modelData.type === "image" && useDefaultGuideDirectories.checked
-                                            text: "Searches recursively in:\nPositive: " + appController.detectorSettingsStore.positiveGuideFolder + "/" + modelData.name + "/\nNegative: " + appController.detectorSettingsStore.negativeGuideFolder + "/" + modelData.name + "/"
+                                            text: "재귀 검색 위치:\n양성: " + appController.detectorSettingsStore.positiveGuideFolder + "/" + modelData.name + "/\n음성: " + appController.detectorSettingsStore.negativeGuideFolder + "/" + modelData.name + "/"
                                             wrapMode: Text.WordWrap
                                             color: Colors.textMuted
                                             font.pixelSize: Typography.t3
@@ -953,35 +1233,35 @@ ApplicationWindow {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             visible: modelData.type === "image" && !useDefaultGuideDirectories.checked
-                                            FieldLabel { text: "Positive images folder" }
+                                            FieldLabel { text: "양성 이미지 폴더" }
                                             Controls.TextField {
                                                 id: positiveGuideDir
                                                 Layout.fillWidth: true
                                                 text: modelData.positiveGuideDir
-                                                placeholderText: "Required; subfolders are included"
+                                                placeholderText: "필수: 하위 폴더 포함"
                                                 onEditingFinished: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, false, text, negativeGuideDir.text)
                                             }
-                                            Controls.Button { text: "Choose"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
+                                            Controls.Button { text: "선택"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = true; guideFolderDialog.open() } }
                                         }
                                         RowLayout {
                                             Layout.fillWidth: true
                                             visible: modelData.type === "image" && !useDefaultGuideDirectories.checked
-                                            FieldLabel { text: "Negative images folder" }
+                                            FieldLabel { text: "음성 이미지 폴더" }
                                             Controls.TextField {
                                                 id: negativeGuideDir
                                                 Layout.fillWidth: true
                                                 text: modelData.negativeGuideDir
-                                                placeholderText: "Optional; subfolders are included"
+                                                placeholderText: "선택 사항: 하위 폴더 포함"
                                                 onEditingFinished: appController.detectorSettingsStore.updateImageTarget(index, modelData.name, false, positiveGuideDir.text, text)
                                             }
-                                            Controls.Button { text: "Choose"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
+                                            Controls.Button { text: "선택"; onClicked: { detectorScroll.guideTargetIndex = index; guideFolderDialog.positiveFolder = false; guideFolderDialog.open() } }
                                         }
                                     }
                                 }
                             }
                             RowLayout {
-                                Controls.Button { text: "+ Add text target"; onClicked: appController.detectorSettingsStore.addTextTarget() }
-                                Controls.Button { text: "+ Add image target"; onClicked: appController.detectorSettingsStore.addImageTarget() }
+                                Controls.Button { text: "+ 텍스트 대상 추가"; onClicked: appController.detectorSettingsStore.addTextTarget() }
+                                Controls.Button { text: "+ 이미지 대상 추가"; onClicked: appController.detectorSettingsStore.addImageTarget() }
                             }
                         }
                     }
@@ -989,13 +1269,44 @@ ApplicationWindow {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Controls.Button { text: "Save detector settings"; isDefault: true; onClicked: appController.detectorSettingsStore.save() }
-                    Controls.Button { text: "Save As..."; onClicked: detectorSettingsSaveDialog.open() }
-                    Controls.Button { text: "Load..."; onClicked: detectorSettingsLoadDialog.open() }
-                    Controls.Button { text: appController.liveDetection ? "Stop Live Detection" : "Start Live Detection"; style: appController.liveDetection ? "danger" : "success"; onClicked: appController.liveDetection ? appController.stopLiveDetection() : appController.startLiveDetection() }
-                    Controls.Button { text: "Detector defaults"; onClicked: appController.detectorSettingsStore.resetToDefaults() }
+                    Controls.Button { text: "감지기 설정 저장"; isDefault: true; onClicked: detectorScroll.saveDefaultSettings() }
+                    Controls.Button {
+                        text: "다른 이름으로 저장..."
+                        onClicked: detectorScroll.afterPendingEditCommitted(function() {
+                            detectorSettingsSaveDialog.open()
+                        })
+                    }
+                    Controls.Button { text: "불러오기..."; onClicked: detectorSettingsLoadDialog.open() }
+                    Controls.Button {
+                        text: appController.liveDetection ? "실시간 감지 중지" : "실시간 감지 시작"
+                        style: appController.liveDetection ? "danger" : "success"
+                        onClicked: {
+                            if (appController.liveDetection) {
+                                appController.stopLiveDetection()
+                            } else {
+                                detectorScroll.afterPendingEditCommitted(function() {
+                                    appController.startLiveDetection()
+                                })
+                            }
+                        }
+                    }
+                    Controls.Button {
+                        text: "감지기 기본값"
+                        onClicked: detectorScroll.afterPendingEditCommitted(function() {
+                            const success = appController.detectorSettingsStore.resetToDefaults()
+                            detectorScroll.showPersistenceResult(success, "감지기 기본값을 복원하고 저장했습니다.")
+                        })
+                    }
                     Item { Layout.fillWidth: true }
-                    Text { text: appController.detectorSettingsStore.lastError; color: Colors.error; visible: text.length > 0; font.pixelSize: Typography.t3 }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: detectorScroll.persistenceMessage
+                    color: detectorScroll.persistenceFailed ? Colors.error : Colors.success
+                    visible: text.length > 0
+                    wrapMode: Text.WordWrap
+                    font.pixelSize: Typography.t3
                 }
             }
         }

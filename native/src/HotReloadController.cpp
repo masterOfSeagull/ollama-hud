@@ -49,7 +49,7 @@ void HotReloadController::performReload()
             }
             created = object != nullptr;
             if (!created) {
-                error = QStringLiteral("Failed to reload %1").arg(m_rootUrl.toString());
+                error = QStringLiteral("%1을(를) 다시 불러오지 못했습니다").arg(m_rootUrl.toString());
             }
         });
 
@@ -64,7 +64,7 @@ void HotReloadController::performReload()
     }
 
     if (error.isEmpty()) {
-        error = QStringLiteral("No root object was created while reloading %1").arg(m_rootUrl.toString());
+        error = QStringLiteral("%1을(를) 다시 불러오는 중 루트 객체가 생성되지 않았습니다").arg(m_rootUrl.toString());
     }
     qWarning().noquote() << "QML hot reload failed:" << error;
     emit reloadFailed(error);

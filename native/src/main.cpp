@@ -27,7 +27,7 @@ int verify()
         out << "Q/A memory pairs: " << settings.memoryQaPairs << "\n";
         out << "Chat log: " << SettingsStore::chatLogPath() << "\n";
         out << "Trigger shortcut: " << parseShortcut(settings.triggerShortcut).display() << "\n";
-        out << "Exit shortcut: " << parseShortcut(settings.exitShortcut).display() << "\n";
+        out << "HUD stop shortcut: " << parseShortcut(settings.exitShortcut).display() << "\n";
         out << "Clear shortcut: " << parseShortcut(settings.clearShortcut).display() << "\n";
         out << "Simulation trigger shortcut: " << parseShortcut(settings.simulationTriggerShortcut).display() << "\n";
         out << "Simulation stop shortcut: " << parseShortcut(settings.simulationStopShortcut).display() << "\n";

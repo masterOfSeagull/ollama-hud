@@ -36,27 +36,28 @@ QJsonObject settingsObject(const DetectorSettings &settings) {
 DetectorSettingsStore::DetectorSettingsStore(QObject *parent) : QObject(parent) { load(); }
 QString DetectorSettingsStore::configPath() { return QDir(SettingsStore::projectRoot()).filePath("config/detector-settings.json"); }
 QUrl DetectorSettingsStore::settingsFolder() const { return QUrl::fromLocalFile(QFileInfo(configPath()).absolutePath()); }
+QString DetectorSettingsStore::localFilePath(const QUrl &url) const { return url.isLocalFile() ? QDir::fromNativeSeparators(url.toLocalFile()) : QString{}; }
 DetectorSettings DetectorSettingsStore::settings() const { return m_settings; }
 void DetectorSettingsStore::validate(const DetectorSettings &s) {
     QJsonParseError parse;
     const QJsonDocument document = QJsonDocument::fromJson(s.targetsJson.toUtf8(), &parse);
-    if (parse.error != QJsonParseError::NoError || !document.isArray()) throw std::invalid_argument("Detector targets must be a JSON array.");
+    if (parse.error != QJsonParseError::NoError || !document.isArray()) throw std::invalid_argument("감지기 대상은 JSON 배열이어야 합니다.");
     const QJsonArray targets = document.array();
-    if (targets.isEmpty()) throw std::invalid_argument("Configure at least one detector target.");
+    if (targets.isEmpty()) throw std::invalid_argument("감지기 대상을 하나 이상 설정하세요.");
     for (const QJsonValue &value : targets) {
         const QJsonObject target = value.toObject();
         const QString name = target.value("name").toString().trimmed();
-        if (!safeTargetName(name)) throw std::invalid_argument("Each detector target needs a name without path characters.");
+        if (!safeTargetName(name)) throw std::invalid_argument("각 감지기 대상에는 경로 문자가 없는 이름이 필요합니다.");
         const bool imageTarget = target.value("type").toString() == "image" || target.value("guide_only").toBool();
         const QJsonArray prompts = target.value("prompts").toArray();
         bool hasPrompt = false;
         for (const QJsonValue &prompt : prompts) {
-            if (!prompt.isString()) throw std::invalid_argument("Detector prompts must be text.");
-            if (!validPromptThreshold(prompt.toString())) throw std::invalid_argument("Prompt thresholds must use prompt:0.0 through prompt:1.0.");
+            if (!prompt.isString()) throw std::invalid_argument("감지기 프롬프트는 텍스트여야 합니다.");
+            if (!validPromptThreshold(prompt.toString())) throw std::invalid_argument("프롬프트 임계값은 prompt:0.0부터 prompt:1.0 형식이어야 합니다.");
             hasPrompt = hasPrompt || !prompt.toString().trimmed().isEmpty();
         }
         if (!imageTarget && !hasPrompt) {
-            throw std::invalid_argument(QStringLiteral("Target '%1' needs at least one prompt or alias.").arg(name).toStdString());
+            throw std::invalid_argument(QStringLiteral("대상 '%1'에는 프롬프트 또는 별칭이 하나 이상 필요합니다.").arg(name).toStdString());
         }
         if (imageTarget) {
             const bool useDefaultDirectories = target.contains("use_default_guide_directories")
@@ -66,11 +67,11 @@ void DetectorSettingsStore::validate(const DetectorSettings &s) {
                 ? QDir(s.positiveGuideFolder).filePath(name)
                 : target.value("positive_guide_dir").toString();
             if (!containsGuideImage(positiveFolder)) {
-                throw std::invalid_argument(QStringLiteral("Image target '%1' needs a positive guide folder containing at least one PNG, JPG, JPEG, or WEBP image.").arg(name).toStdString());
+                throw std::invalid_argument(QStringLiteral("이미지 대상 '%1'에는 PNG, JPG, JPEG 또는 WEBP 이미지가 하나 이상 있는 양성 가이드 폴더가 필요합니다.").arg(name).toStdString());
             }
         }
     }
-    if (s.liveRate < .2 || s.liveRate > 30) throw std::invalid_argument("Live detection rate must be between 0.2 and 30 Hz.");
+    if (s.liveRate < .2 || s.liveRate > 30) throw std::invalid_argument("실시간 감지 빈도는 0.2~30 Hz여야 합니다.");
 }
 bool DetectorSettingsStore::load() {
     QFile file(configPath()); if (!file.exists()) return true;
@@ -80,11 +81,11 @@ bool DetectorSettingsStore::save() { return saveToFile(configPath()); }
 bool DetectorSettingsStore::saveToFile(const QString &path) {
     try {
         const QString selectedPath = path.trimmed();
-        if (selectedPath.isEmpty()) throw std::invalid_argument("Choose a detector settings file.");
+        if (selectedPath.isEmpty()) throw std::invalid_argument("감지기 설정 파일을 선택하세요.");
         validate(m_settings);
         QDir().mkpath(QFileInfo(selectedPath).absolutePath());
         QFile file(selectedPath);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) throw std::runtime_error(QStringLiteral("Could not write detector settings: %1").arg(selectedPath).toStdString());
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) throw std::runtime_error(QStringLiteral("감지기 설정을 쓸 수 없습니다: %1").arg(selectedPath).toStdString());
         file.write(QJsonDocument(settingsObject(m_settings)).toJson(QJsonDocument::Indented));
         setLastError({});
         return true;
@@ -93,14 +94,14 @@ bool DetectorSettingsStore::saveToFile(const QString &path) {
 bool DetectorSettingsStore::loadFromFile(const QString &path) {
     try {
         const QString selectedPath = path.trimmed();
-        if (selectedPath.isEmpty()) throw std::invalid_argument("Choose a detector settings file.");
+        if (selectedPath.isEmpty()) throw std::invalid_argument("감지기 설정 파일을 선택하세요.");
         QFile file(selectedPath);
-        if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error(QStringLiteral("Could not read detector settings: %1").arg(selectedPath).toStdString());
+        if (!file.open(QIODevice::ReadOnly)) throw std::runtime_error(QStringLiteral("감지기 설정을 읽을 수 없습니다: %1").arg(selectedPath).toStdString());
         QJsonParseError parse;
         const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parse);
-        if (parse.error != QJsonParseError::NoError || !document.isObject()) throw std::invalid_argument("Detector settings must be a JSON object.");
+        if (parse.error != QJsonParseError::NoError || !document.isObject()) throw std::invalid_argument("감지기 설정은 JSON 객체여야 합니다.");
         const QJsonObject object = document.object();
-        if (object.contains("targets") && !object.value("targets").isArray()) throw std::invalid_argument("Detector settings targets must be an array.");
+        if (object.contains("targets") && !object.value("targets").isArray()) throw std::invalid_argument("감지기 설정의 대상은 배열이어야 합니다.");
         DetectorSettings loaded;
         loaded.enabled = object.value("enabled").toBool(loaded.enabled); loaded.model = object.value("model").toString(loaded.model); loaded.device = object.value("device").toString(loaded.device); loaded.dtype = object.value("dtype").toString(loaded.dtype); loaded.textThreshold = object.value("text_threshold").toDouble(loaded.textThreshold); loaded.guideThreshold = object.value("guide_threshold").toDouble(loaded.guideThreshold); if (object.contains("targets")) loaded.targetsJson = QString::fromUtf8(QJsonDocument(object.value("targets").toArray()).toJson(QJsonDocument::Compact)); loaded.positiveGuideFolder = object.value("positive_guide_folder").toString(loaded.positiveGuideFolder); loaded.negativeGuideFolder = object.value("negative_guide_folder").toString(loaded.negativeGuideFolder); loaded.liveRate = object.value("live_rate").toDouble(loaded.liveRate);
         validate(loaded);

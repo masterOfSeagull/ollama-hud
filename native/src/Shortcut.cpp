@@ -79,7 +79,7 @@ QPair<int, QString> parseKey(const QString &lowered, const QString &original)
             return {0x6F + number, QStringLiteral("F%1").arg(number)};
         }
     }
-    throw std::invalid_argument(QStringLiteral("unsupported shortcut key: %1").arg(original).toStdString());
+    throw std::invalid_argument(QStringLiteral("지원하지 않는 단축키: %1").arg(original).toStdString());
 }
 }
 
@@ -109,7 +109,7 @@ KeyboardShortcut parseShortcut(const QString &text)
 {
     const QStringList rawParts = text.split('+', Qt::SkipEmptyParts);
     if (rawParts.isEmpty()) {
-        throw std::invalid_argument("shortcut cannot be empty");
+        throw std::invalid_argument("단축키는 비워둘 수 없습니다.");
     }
 
     KeyboardShortcut shortcut;
@@ -130,7 +130,7 @@ KeyboardShortcut parseShortcut(const QString &text)
             continue;
         }
         if (hasKey) {
-            throw std::invalid_argument(QStringLiteral("shortcut has multiple keys: %1").arg(text).toStdString());
+            throw std::invalid_argument(QStringLiteral("단축키에 여러 키가 있습니다: %1").arg(text).toStdString());
         }
         const auto parsed = parseKey(lowered, part);
         shortcut.keyCode = parsed.first;
@@ -138,7 +138,7 @@ KeyboardShortcut parseShortcut(const QString &text)
         hasKey = true;
     }
     if (!hasKey) {
-        throw std::invalid_argument("shortcut must include a non-modifier key");
+        throw std::invalid_argument("단축키에는 수정 키가 아닌 키가 포함되어야 합니다.");
     }
     return shortcut;
 }

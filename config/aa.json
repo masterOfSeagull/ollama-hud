@@ -1,0 +1,55 @@
+{
+    "device": "auto",
+    "dtype": "auto",
+    "enabled": true,
+    "guide_threshold": 4,
+    "live_rate": 10,
+    "model": "google/owlv2-base-patch16-ensemble",
+    "negative_guide_folder": "C:/projects/owlv2-visual-detector/assets/guides/negative",
+    "positive_guide_folder": "C:/projects/owlv2-visual-detector/assets/guides/positive",
+    "targets": [
+        {
+            "name": "breakable wall",
+            "prompts": [
+                "minimal white pickaxe striking icon: 0.20"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "portal",
+            "prompts": [
+                "rotating blue black portal:0.5"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "pathway",
+            "prompts": [
+                "brighter icy doorway: 0.25"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "cleared",
+            "prompts": [
+                "Yellow 'Room Cleared' Text: 0.2"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "entrance",
+            "prompts": [
+                "black entrance with shimmering enemy outlines:0.26"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "dragon egg",
+            "prompts": [
+                "orange dragon egg: 0.35"
+            ],
+            "type": "text"
+        }
+    ],
+    "text_threshold": 0.1
+}

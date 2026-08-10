@@ -39,6 +39,7 @@ public:
     explicit DetectorSettingsStore(QObject *parent = nullptr);
     static QString configPath();
     QUrl settingsFolder() const;
+    Q_INVOKABLE QString localFilePath(const QUrl &url) const;
     DetectorSettings settings() const;
     Q_INVOKABLE bool save();
     Q_INVOKABLE bool saveToFile(const QString &path);

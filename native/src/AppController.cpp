@@ -7,11 +7,17 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QGuiApplication>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonArray>
 #include <QMetaObject>
 #include <QQmlEngine>
 #include <QQuickWindow>
+#include <QSaveFile>
+#include <QUrl>
 #include <QtConcurrent>
 
 #ifdef Q_OS_WIN
@@ -47,12 +53,53 @@ bool latchedPress(const KeyboardShortcut &shortcut, bool &armed)
     armed = false;
     return true;
 }
+
+QString saveSessionScreenshot(const QString &directory, const QString &captureId, const QString &jpegBase64)
+{
+    if (directory.isEmpty() || captureId.isEmpty() || jpegBase64.isEmpty()) {
+        return {};
+    }
+    const QString filename = QStringLiteral("%1-%2.jpg")
+                                 .arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss-zzz"), captureId);
+    const QString path = QDir(directory).filePath(filename);
+    const QByteArray jpeg = QByteArray::fromBase64(jpegBase64.toLatin1());
+    QSaveFile file(path);
+    if (jpeg.isEmpty() || !file.open(QIODevice::WriteOnly) || file.write(jpeg) != jpeg.size() || !file.commit()) {
+        return {};
+    }
+    return path;
+}
+
+QVariantMap sessionLogEntry(
+    const QString &captureId,
+    const QString &question,
+    const QString &answer,
+    const QString &error,
+    const QString &screenshotPath,
+    const QString &doneReason = {},
+    qint64 generatedTokens = -1,
+    qint64 totalDurationNs = -1)
+{
+    return {
+        {"timestamp", QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss")},
+        {"captureId", captureId},
+        {"question", question},
+        {"answer", answer},
+        {"error", error},
+        {"isError", !error.isEmpty()},
+        {"screenshotPath", screenshotPath},
+        {"screenshotUrl", screenshotPath.isEmpty() ? QString{} : QUrl::fromLocalFile(screenshotPath).toString()},
+        {"doneReason", doneReason},
+        {"generatedTokens", generatedTokens},
+        {"totalDurationSeconds", totalDurationNs < 0 ? -1.0 : static_cast<double>(totalDurationNs) / 1000000000.0},
+    };
+}
 }
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
 {
-    m_snapshot.message = QStringLiteral("Ready - press %1").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
+    m_snapshot.message = QStringLiteral("준비됨 - %1을(를) 누르세요").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
     connect(&m_hotkeyTimer, &QTimer::timeout, this, &AppController::pollHotkeys);
     m_hotkeyTimer.setInterval(30);
     connect(&m_inputSimulation, &InputSimulationService::changed, this, &AppController::simulationChanged);
@@ -60,12 +107,17 @@ AppController::AppController(QObject *parent)
     m_detectorPollTimer.setInterval(250);
     connect(&m_requestWatcher, &QFutureWatcher<CaptureRequestResult>::finished, this, [this] {
         const CaptureRequestResult result = m_requestWatcher.result();
-        if (result.snapshot.state == "ANSWER") {
+        if (result.snapshot.state == "답변") {
             rememberAnswer(result.answer, result.memoryImageB64, result.settings);
         }
         if (!result.detectorResult.isEmpty()) {
             updateDetectorBoxes(result.detectorResult);
         }
+        if (!result.sessionLogEntry.isEmpty()) {
+            m_sessionLogEntries.prepend(result.sessionLogEntry);
+            emit sessionLogChanged();
+        }
+        m_koreanTranslation = result.koreanTranslation;
         setSnapshot(result.snapshot);
         if (result.resumeLive) {
             resumeLiveDetection();
@@ -83,7 +135,8 @@ SettingsStore *AppController::settingsStore() { return &m_settingsStore; }
 DetectorSettingsStore *AppController::detectorSettingsStore() { return &m_detectorSettingsStore; }
 QString AppController::state() const { return m_snapshot.state; }
 QString AppController::message() const { return m_snapshot.message; }
-QString AppController::visualAnswer() const { return m_snapshot.state == "ANSWER" ? m_snapshot.message : QString(); }
+QString AppController::visualAnswer() const { return m_snapshot.state == "답변" ? m_snapshot.message : QString(); }
+QString AppController::koreanTranslation() const { return m_koreanTranslation; }
 QString AppController::captureId() const { return m_snapshot.captureId; }
 bool AppController::active() const { return m_snapshot.active; }
 bool AppController::hudCollapsed() const { return m_hudCollapsed; }
@@ -94,25 +147,30 @@ QString AppController::simulationStatus() const { return m_inputSimulation.statu
 QString AppController::detectorStatus() const { return m_detectorStatus; }
 bool AppController::liveDetection() const { return m_liveDetection; }
 QVariantList AppController::detectorBoxes() const { return m_detectorBoxes; }
+QVariantList AppController::sessionLogEntries() const { return m_sessionLogEntries; }
 
 void AppController::startHud()
 {
     if (!saveSettings()) {
         return;
     }
+    const bool started = !m_hudRunning;
     ensureOverlay();
-    if (!m_hudRunning) {
+    if (started) {
         m_hudRunning = true;
         m_hotkeyTimer.start();
         emit hudRunningChanged();
     }
     clearVisualAnswer();
+    if (started && m_detectorSettingsStore.enabled()) {
+        startLiveDetection();
+    }
 }
 
 void AppController::stopHud()
 {
     m_hotkeyTimer.stop();
-    m_inputSimulation.stop(QStringLiteral("HUD stopped"));
+    m_inputSimulation.stop(QStringLiteral("HUD 중지됨"));
     stopLiveDetection();
     closeOverlay();
     if (m_hudRunning) {
@@ -148,15 +206,15 @@ void AppController::testOllama()
     if (!saveSettings()) {
         return;
     }
-    setSnapshot({"TESTING", "Testing Ollama model.", true, m_snapshot.captureId, false});
+    setSnapshot({"테스트 중", "Ollama 모델을 테스트하고 있습니다.", true, m_snapshot.captureId, false});
     const HudSettings settings = m_settingsStore.settings();
     QtConcurrent::run([this, settings] {
         RuntimeSnapshot snapshot;
         try {
             const OllamaReply reply = m_ollamaService.testModel(settings);
-            snapshot = {"READY", QStringLiteral("Model replied: %1").arg(reply.answer), false, {}, false};
+            snapshot = {"준비", QStringLiteral("모델 응답: %1").arg(reply.answer), false, {}, false};
         } catch (const std::exception &error) {
-            snapshot = {"ERROR", shortError(error), false, {}, true};
+            snapshot = {"오류", shortError(error), false, {}, true};
         }
         QMetaObject::invokeMethod(this, [this, snapshot] { setSnapshot(snapshot); }, Qt::QueuedConnection);
     });
@@ -164,8 +222,8 @@ void AppController::testOllama()
 
 void AppController::clearVisualAnswer()
 {
-    const QString ready = QStringLiteral("Ready - press %1").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
-    setSnapshot({"READY", ready, false, m_snapshot.captureId, false});
+    const QString ready = QStringLiteral("준비됨 - %1을(를) 누르세요").arg(parseShortcut(m_settingsStore.settings().triggerShortcut).display());
+    setSnapshot({"준비", ready, false, m_snapshot.captureId, false});
 }
 
 void AppController::toggleHudCollapsed()
@@ -176,7 +234,7 @@ void AppController::toggleHudCollapsed()
 
 void AppController::stopSimulation()
 {
-    m_inputSimulation.stop(QStringLiteral("Stopped by user"));
+    m_inputSimulation.stop(QStringLiteral("사용자가 중지함"));
 }
 
 bool AppController::saveSettings()
@@ -184,7 +242,7 @@ bool AppController::saveSettings()
     if (m_settingsStore.save()) {
         return true;
     }
-    setSnapshot({"ERROR", m_settingsStore.lastError(), false, m_snapshot.captureId, true});
+    setSnapshot({"오류", m_settingsStore.lastError(), false, m_snapshot.captureId, true});
     return false;
 }
 
@@ -193,17 +251,17 @@ bool AppController::prepareDetector()
     if (!m_detectorSettingsStore.save()) {
         m_detectorStatus = m_detectorSettingsStore.lastError();
         emit detectorChanged();
-        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+        setSnapshot({"오류", m_detectorStatus, false, m_snapshot.captureId, true});
         return false;
     }
     QString error;
     if (!m_detectorClient.prepare(&error)) {
         m_detectorStatus = error;
         emit detectorChanged();
-        setSnapshot({"ERROR", error, false, m_snapshot.captureId, true});
+        setSnapshot({"오류", error, false, m_snapshot.captureId, true});
         return false;
     }
-    m_detectorStatus = "Worker ready";
+    m_detectorStatus = "워커 준비됨";
     emit detectorChanged();
     return true;
 }
@@ -214,18 +272,21 @@ void AppController::startLiveDetection()
         startHud();
         if (!m_hudRunning) return;
     }
+    if (m_liveDetection) {
+        return;
+    }
     if (!prepareDetector()) return;
     try {
         m_detectorClient.startLive(m_detectorSettingsStore.settings());
         m_liveDetection = true;
-        m_detectorStatus = "Live detection running";
+        m_detectorStatus = "실시간 감지 실행 중";
         m_detectorPollTimer.setInterval(qRound(1000.0 / qMax(0.2, m_detectorSettingsStore.liveRate())));
         m_detectorPollTimer.start();
         emit detectorChanged();
     } catch (const std::exception &error) {
         m_detectorStatus = shortError(error);
         emit detectorChanged();
-        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+        setSnapshot({"오류", m_detectorStatus, false, m_snapshot.captureId, true});
     }
 }
 
@@ -237,7 +298,7 @@ void AppController::stopLiveDetection()
     }
     m_liveDetection = false;
     m_detectorBoxes.clear();
-    if (m_detectorStatus == "Live detection running") m_detectorStatus = m_detectorSettingsStore.enabled() ? "Worker ready" : "Disabled";
+    if (m_detectorStatus == "실시간 감지 실행 중") m_detectorStatus = m_detectorSettingsStore.enabled() ? "워커 준비됨" : "사용 안 함";
     emit detectorChanged();
 }
 
@@ -247,7 +308,7 @@ void AppController::toggleDetectorEnabled()
         stopLiveDetection();
         m_detectorSettingsStore.setEnabled(false);
         if (m_detectorSettingsStore.save()) {
-            m_detectorStatus = "Disabled";
+            m_detectorStatus = "사용 안 함";
         } else {
             m_detectorStatus = m_detectorSettingsStore.lastError();
         }
@@ -259,9 +320,9 @@ void AppController::toggleDetectorEnabled()
     if (!m_detectorSettingsStore.save()) {
         m_detectorSettingsStore.setEnabled(false);
         m_detectorStatus = m_detectorSettingsStore.lastError();
-        setSnapshot({"ERROR", m_detectorStatus, false, m_snapshot.captureId, true});
+        setSnapshot({"오류", m_detectorStatus, false, m_snapshot.captureId, true});
     } else {
-        m_detectorStatus = "Enabled - ready for the next capture";
+        m_detectorStatus = "사용 중 - 다음 캡처 준비됨";
     }
     emit detectorChanged();
 }
@@ -271,7 +332,7 @@ void AppController::toggleLiveDetection()
     if (m_liveDetection) {
         stopLiveDetection();
     } else if (!m_detectorSettingsStore.enabled()) {
-        setSnapshot({"ERROR", "Enable the OWLv2 detector before starting live detection.", false, m_snapshot.captureId, true});
+        setSnapshot({"오류", "실시간 감지를 시작하기 전에 OWLv2 감지기를 사용 설정하세요.", false, m_snapshot.captureId, true});
     } else {
         startLiveDetection();
     }
@@ -282,14 +343,16 @@ void AppController::resumeLiveDetection()
     if (m_detectorSettingsStore.enabled()) startLiveDetection();
 }
 
-CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings)
+CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const HudSettings &settings, const QList<ChatMemory> &memories, bool detectorEnabled, const DetectorSettings &detectorSettings, const QString &sessionCaptureDirectory)
 {
     QString retry = "none";
     QString thinking;
     QString captureId;
+    QString sessionScreenshotPath;
     try {
         captureId = CaptureService::imageFingerprint(image);
         QString initial = CaptureService::encodeJpegBase64(image, settings.screenshotMaxEdge, 85);
+        sessionScreenshotPath = saveSessionScreenshot(sessionCaptureDirectory, captureId, initial);
         QJsonObject detectorResult;
         QString detectorContext;
         if (detectorEnabled) {
@@ -311,12 +374,18 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
             } catch (const OllamaException &retryError) {
                 thinking = retryError.thinking();
                 if (OllamaService::isContextLimitError(retryError.what())) {
-                    throw OllamaException("Context too large; lower capture size.");
+                    throw OllamaException("컨텍스트가 너무 큽니다. 캡처 크기를 줄이세요.");
                 }
                 throw;
             }
         }
         thinking = reply.thinking;
+        QString koreanTranslation;
+        try {
+            koreanTranslation = m_ollamaService.translateToKorean(settings, reply.answer).answer;
+        } catch (const std::exception &translationError) {
+            koreanTranslation = QStringLiteral("한국어 번역을 생성하지 못했습니다: %1").arg(shortError(translationError));
+        }
         const QString memoryImageB64 = settings.memoryQaPairs > 0 ? CaptureService::encodeJpegBase64(image, 768, 70) : QString();
         ChatLogService::write({
             captureId,
@@ -334,23 +403,44 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
             reply.promptEvalDurationNs,
             reply.evalDurationNs,
         }, settings);
-        return {{"ANSWER", reply.answer, false, captureId, false}, reply.answer, memoryImageB64, settings, detectorResult, false};
+        return {
+            {"답변", reply.answer, false, captureId, false},
+            reply.answer,
+            memoryImageB64,
+            settings,
+            detectorResult,
+            false,
+            sessionLogEntry(captureId, settings.query, reply.answer, {}, sessionScreenshotPath, reply.doneReason, reply.evalCount, reply.totalDurationNs),
+            koreanTranslation,
+        };
     } catch (const std::exception &error) {
         const QString message = shortError(error);
         ChatLogService::write({captureId, settings.query, memories, {}, message, retry, thinking}, settings);
-        return {{"ERROR", message, false, captureId, true}, {}, {}, settings, {}, false};
+        return {
+            {"오류", message, false, captureId, true},
+            {},
+            {},
+            settings,
+            {},
+            false,
+            sessionLogEntry(captureId, settings.query, {}, message, sessionScreenshotPath),
+            {},
+        };
     }
 }
 
 void AppController::setSnapshot(const RuntimeSnapshot &snapshot)
 {
+    if (snapshot.state != "답변") {
+        m_koreanTranslation.clear();
+    }
     m_snapshot = snapshot;
     emit snapshotChanged();
 }
 
 void AppController::runAsyncRequest(bool resumeLive, bool detectorEnabled, const DetectorSettings &detectorSettings)
 {
-    setSnapshot({"CAPTURING", "Capturing primary monitor.", true, m_snapshot.captureId, false});
+    setSnapshot({"캡처 중", "주 모니터를 캡처하고 있습니다.", true, m_snapshot.captureId, false});
     const HudSettings settings = m_settingsStore.settings();
     const QList<ChatMemory> memories = m_memories;
 
@@ -378,16 +468,41 @@ void AppController::captureOnGuiThread(const HudSettings &settings, const QList<
     try {
         image = CaptureService::capturePrimaryMonitor();
     } catch (const std::exception &error) {
-        setSnapshot({"ERROR", shortError(error), false, m_snapshot.captureId, true});
+        setSnapshot({"오류", shortError(error), false, m_snapshot.captureId, true});
         return;
     }
 
-    setSnapshot({"ASKING", "Sending screenshot to Ollama.", true, m_snapshot.captureId, false});
-    m_requestWatcher.setFuture(QtConcurrent::run([this, image, settings, memories, resumeLive, detectorEnabled, detectorSettings] {
-        CaptureRequestResult result = runCaptureRequest(image, settings, memories, detectorEnabled, detectorSettings);
+    setSnapshot({"질문 중", "스크린샷을 Ollama로 보내고 있습니다.", true, m_snapshot.captureId, false});
+    const QString sessionCaptureDirectory = m_sessionCaptureDirectory.isValid() ? m_sessionCaptureDirectory.path() : QString{};
+    m_requestWatcher.setFuture(QtConcurrent::run([this, image, settings, memories, resumeLive, detectorEnabled, detectorSettings, sessionCaptureDirectory] {
+        CaptureRequestResult result = runCaptureRequest(image, settings, memories, detectorEnabled, detectorSettings, sessionCaptureDirectory);
         result.resumeLive = resumeLive;
         return result;
     }));
+}
+
+bool AppController::openLogFolder()
+{
+    const QString folder = QFileInfo(SettingsStore::chatLogPath()).absolutePath();
+    QDir().mkpath(folder);
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+}
+
+bool AppController::openSessionScreenshot(const QString &path)
+{
+    if (!m_sessionCaptureDirectory.isValid()) {
+        return false;
+    }
+    const QFileInfo requested(path);
+    const QString sessionRoot = QFileInfo(m_sessionCaptureDirectory.path()).canonicalFilePath();
+    const QString screenshot = requested.canonicalFilePath();
+    const QString screenshotFolder = requested.canonicalPath();
+    if (sessionRoot.isEmpty() || screenshot.isEmpty()
+        || screenshotFolder.compare(sessionRoot, Qt::CaseInsensitive) != 0
+        || requested.suffix().compare("jpg", Qt::CaseInsensitive) != 0) {
+        return false;
+    }
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(screenshot));
 }
 
 void AppController::updateDetectorBoxes(const QJsonObject &result)
@@ -408,7 +523,7 @@ void AppController::updateDetectorBoxes(const QJsonObject &result)
     m_detectorBoxes = boxes;
     const QJsonObject runtime = result.value("runtime").toObject();
     const double ms = result.value("latency").toObject().value("total_ms").toDouble();
-    m_detectorStatus = QStringLiteral("%1 boxes | %2 %3 | %4 ms").arg(boxes.size()).arg(runtime.value("device").toString()).arg(runtime.value("dtype").toString()).arg(QString::number(ms, 'f', 0));
+    m_detectorStatus = QStringLiteral("상자 %1개 | %2 %3 | %4 ms").arg(boxes.size()).arg(runtime.value("device").toString()).arg(runtime.value("dtype").toString()).arg(QString::number(ms, 'f', 0));
     emit detectorChanged();
 }
 
@@ -441,7 +556,7 @@ void AppController::ensureOverlay()
 #endif
     QObject *created = component.createWithInitialProperties({{"appController", QVariant::fromValue(this)}});
     if (!created) {
-        setSnapshot({"ERROR", component.errorString(), false, m_snapshot.captureId, true});
+        setSnapshot({"오류", component.errorString(), false, m_snapshot.captureId, true});
         return;
     }
     m_overlay = created;
@@ -466,7 +581,7 @@ void AppController::pollHotkeys()
         const HudSettings settings = m_settingsStore.settings();
         const KeyboardShortcut exitShortcut = parseShortcut(settings.exitShortcut);
         if (exitShortcutPressed(exitShortcut)) {
-            QGuiApplication::quit();
+            stopHud();
             return;
         }
         const KeyboardShortcut clearShortcut = parseShortcut(settings.clearShortcut);
@@ -479,7 +594,7 @@ void AppController::pollHotkeys()
         }
         const KeyboardShortcut simulationStopShortcut = parseShortcut(settings.simulationStopShortcut);
         if (m_inputSimulation.running() && latchedPress(simulationStopShortcut, m_simulationStopArmed)) {
-            m_inputSimulation.stop(QStringLiteral("Emergency stop"));
+            m_inputSimulation.stop(QStringLiteral("긴급 중지"));
         }
         const KeyboardShortcut simulationTriggerShortcut = parseShortcut(settings.simulationTriggerShortcut);
         if (latchedPress(simulationTriggerShortcut, m_simulationTriggerArmed)) {
@@ -494,7 +609,7 @@ void AppController::pollHotkeys()
             toggleLiveDetection();
         }
     } catch (const std::exception &error) {
-        setSnapshot({"ERROR", shortError(error), false, m_snapshot.captureId, true});
+        setSnapshot({"오류", shortError(error), false, m_snapshot.captureId, true});
     }
 }
 
@@ -518,7 +633,7 @@ QString AppController::shortError(const std::exception &error) const
 {
     QString text = QString::fromUtf8(error.what()).trimmed();
     if (text.isEmpty()) {
-        text = "Unknown error";
+        text = "알 수 없는 오류";
     }
     return text.size() <= 180 ? text : text.left(177) + "...";
 }

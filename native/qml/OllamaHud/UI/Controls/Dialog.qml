@@ -83,7 +83,7 @@ Dialog {
                                                            - footerImplicitHeight
                                                            - Metrics.padding * 2.5)
 
-    title: "About"
+    title: "정보"
 
     implicitHeight: columnHeader.implicitHeight
                     + contentColumn.implicitHeight
@@ -335,7 +335,7 @@ Dialog {
             appendFooterButton(Dialog.Reset, qsTr("Reset"), "reset")
 
         if (standardButtons & Dialog.RestoreDefaults)
-            appendFooterButton(Dialog.RestoreDefaults, qsTr("Reset"), "reset")
+            appendFooterButton(Dialog.RestoreDefaults, qsTr("초기화"), "reset")
 
         if (standardButtons & Dialog.Abort)
             appendFooterButton(Dialog.Abort, qsTr("Abort"), "reject")

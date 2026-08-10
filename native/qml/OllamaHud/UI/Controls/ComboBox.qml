@@ -272,7 +272,7 @@ T.ComboBox {
                 enabled: control.searchable
                 height: 36
                 width: parent.width
-                placeholderText: "Search..."
+                placeholderText: "검색..."
                 text: control.searchText
                 onTextChanged: control.searchText = text
 
