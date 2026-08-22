@@ -5,8 +5,9 @@ overlay. It waits for the configured trigger shortcut, captures the primary
 monitor, sends one screenshot to a local Ollama vision model, and displays a
 short answer in the HUD panel.
 
-The app is detection/advice only. It does not automate gameplay, read process
-memory, inject input, capture active windows, or intercept mouse/keyboard input.
+The app is detection/advice only. It does not read process memory or capture
+active windows. Its optional input simulation is explicitly started with its
+own shortcut and can use a connected Ricochet Pico as a real USB HID keyboard.
 
 ## Setup
 
@@ -47,6 +48,15 @@ Use the `Model` field to choose an installed Ollama model, then use
 `Start HUD`, switch back to the game or desktop, and press `Alt+1`.
 Press `Alt+2` to collapse the HUD while preserving its text; press it again to expand it.
 Press `Esc` to close the HUD. `Ctrl+`` is always an emergency HUD exit.
+
+## Ricochet hardware input
+
+Input Simulation defaults to the `ricochet` backend on `COM3`. Connect the Pico
+flashed with the current Ricochet firmware, select its COM port in Settings,
+then trigger the simulation with `Alt+3`; `Alt+4` always sends `RELEASE_ALL`.
+The HUD verifies `PING`/`PONG` before it starts. This uses the Pico's USB HID
+keyboard rather than Windows `SendInput`, which is needed when a foreground
+game ignores injected events. Select `sendinput` only for desktop testing.
 
 `Q/A memory pairs` controls how many recent successful question/answer pairs
 are included in the next chat request. The default is `3`; set it to `0` to

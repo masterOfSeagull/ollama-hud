@@ -829,6 +829,24 @@ ApplicationWindow {
                         onEditingFinished: appController.settingsStore.simulationStopShortcut = text
                     }
 
+                    FieldLabel { text: "입력 장치"; visible: !promptOnly }
+                    Controls.ComboBox {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        model: ["ricochet", "sendinput"]
+                        currentIndex: Math.max(0, model.indexOf(appController.settingsStore.simulationInputBackend))
+                        onActivated: appController.settingsStore.simulationInputBackend = modelTextAt(currentIndex)
+                    }
+
+                    FieldLabel { text: "Ricochet COM 포트"; visible: !promptOnly }
+                    Controls.TextField {
+                        Layout.preferredWidth: 220
+                        visible: !promptOnly
+                        text: appController.settingsStore.simulationRicochetPort
+                        placeholderText: "COM3"
+                        onEditingFinished: appController.settingsStore.simulationRicochetPort = text
+                    }
+
                     FieldLabel { text: "감지기 켜기 / 끄기"; visible: !promptOnly }
                     Controls.TextField {
                         Layout.preferredWidth: 220

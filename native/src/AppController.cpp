@@ -8,12 +8,16 @@
 #include <QQmlContext>
 #include <QGuiApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QImage>
 #include <QJsonArray>
 #include <QMetaObject>
+#include <QPainter>
+#include <QPen>
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QSaveFile>
@@ -25,6 +29,28 @@
 #endif
 
 namespace {
+#ifdef Q_OS_WIN
+enum GlobalHotkeyId {
+    CaptureHotkeyId = 0x4F01,
+    ExitHotkeyId,
+    ClearHotkeyId,
+    SimulationStartHotkeyId,
+    SimulationStopHotkeyId,
+    DetectorToggleHotkeyId,
+    LiveDetectionToggleHotkeyId,
+    EmergencyExitHotkeyId,
+};
+
+bool registerGlobalHotkey(int id, const KeyboardShortcut &shortcut)
+{
+    UINT modifiers = MOD_NOREPEAT;
+    if (shortcut.modifiers.contains(QStringLiteral("Ctrl"))) modifiers |= MOD_CONTROL;
+    if (shortcut.modifiers.contains(QStringLiteral("Alt"))) modifiers |= MOD_ALT;
+    if (shortcut.modifiers.contains(QStringLiteral("Shift"))) modifiers |= MOD_SHIFT;
+    return RegisterHotKey(nullptr, id, modifiers, static_cast<UINT>(shortcut.keyCode)) != FALSE;
+}
+#endif
+
 void applyClickThrough(QObject *object)
 {
 #ifdef Q_OS_WIN
@@ -70,6 +96,47 @@ QString saveSessionScreenshot(const QString &directory, const QString &captureId
     return path;
 }
 
+QImage annotateDetections(const QImage &image, const QJsonObject &result)
+{
+    if (image.isNull()) {
+        return image;
+    }
+    QImage annotated = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QPainter painter(&annotated);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QList<QColor> colors { QColor("#f6c945"), QColor("#35d0ba"), QColor("#fb7185"), QColor("#a78bfa") };
+    int index = 0;
+    for (const QJsonValue &value : result.value("detections").toArray()) {
+        const QJsonObject detection = value.toObject();
+        const QJsonArray box = detection.value("box").toArray();
+        if (box.size() != 4) {
+            continue;
+        }
+        const QRectF bounds(
+            QPointF(box.at(0).toDouble(), box.at(1).toDouble()),
+            QPointF(box.at(2).toDouble(), box.at(3).toDouble()));
+        const QRectF clipped = bounds.normalized().intersected(QRectF(0, 0, annotated.width(), annotated.height()));
+        if (clipped.isEmpty()) {
+            continue;
+        }
+        const QColor color = colors.at(index++ % colors.size());
+        painter.setPen(QPen(color, qMax(2.0, annotated.width() / 700.0)));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(clipped);
+        const QString label = QStringLiteral("%1  %2")
+                                  .arg(DetectorClient::displayLabel(detection))
+                                  .arg(QString::number(detection.value("score").toDouble(), 'f', 2));
+        const QFontMetrics metrics(painter.font());
+        const QRect labelRect = metrics.boundingRect(label).adjusted(-5, -3, 5, 3);
+        const int labelX = qBound(0, qRound(clipped.left()), qMax(0, annotated.width() - labelRect.width()));
+        const int labelY = qMax(0, qRound(clipped.top()) - labelRect.height());
+        painter.fillRect(QRect(labelX, labelY, labelRect.width(), labelRect.height()), color);
+        painter.setPen(Qt::black);
+        painter.drawText(labelX + 5, labelY + metrics.ascent() + 3, label);
+    }
+    return annotated;
+}
+
 QVariantMap sessionLogEntry(
     const QString &captureId,
     const QString &question,
@@ -103,6 +170,12 @@ AppController::AppController(QObject *parent)
     connect(&m_hotkeyTimer, &QTimer::timeout, this, &AppController::pollHotkeys);
     m_hotkeyTimer.setInterval(30);
     connect(&m_inputSimulation, &InputSimulationService::changed, this, &AppController::simulationChanged);
+#ifdef Q_OS_WIN
+    QCoreApplication::instance()->installNativeEventFilter(this);
+    connect(&m_settingsStore, &SettingsStore::settingsChanged, this, [this] {
+        if (m_hudRunning) registerHotkeys();
+    });
+#endif
     connect(&m_detectorPollTimer, &QTimer::timeout, this, &AppController::pollDetectorLive);
     m_detectorPollTimer.setInterval(250);
     connect(&m_requestWatcher, &QFutureWatcher<CaptureRequestResult>::finished, this, [this] {
@@ -128,6 +201,9 @@ AppController::AppController(QObject *parent)
 AppController::~AppController()
 {
     stopHud();
+#ifdef Q_OS_WIN
+    QCoreApplication::instance()->removeNativeEventFilter(this);
+#endif
     m_requestWatcher.waitForFinished();
 }
 
@@ -158,7 +234,11 @@ void AppController::startHud()
     ensureOverlay();
     if (started) {
         m_hudRunning = true;
+#ifdef Q_OS_WIN
+        registerHotkeys();
+#else
         m_hotkeyTimer.start();
+#endif
         emit hudRunningChanged();
     }
     clearVisualAnswer();
@@ -169,7 +249,11 @@ void AppController::startHud()
 
 void AppController::stopHud()
 {
+#ifdef Q_OS_WIN
+    unregisterHotkeys();
+#else
     m_hotkeyTimer.stop();
+#endif
     m_inputSimulation.stop(QStringLiteral("HUD 중지됨"));
     stopLiveDetection();
     closeOverlay();
@@ -349,16 +433,20 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
     QString thinking;
     QString captureId;
     QString sessionScreenshotPath;
+    QString initial;
     try {
         captureId = CaptureService::imageFingerprint(image);
-        QString initial = CaptureService::encodeJpegBase64(image, settings.screenshotMaxEdge, 85);
-        sessionScreenshotPath = saveSessionScreenshot(sessionCaptureDirectory, captureId, initial);
+        initial = CaptureService::encodeJpegBase64(image, settings.screenshotMaxEdge, 85);
         QJsonObject detectorResult;
         QString detectorContext;
         if (detectorEnabled) {
             detectorResult = m_detectorClient.detect(image, detectorSettings);
             detectorContext = DetectorClient::summary(detectorResult);
         }
+        const QImage savedImage = detectorEnabled ? annotateDetections(image, detectorResult) : image;
+        sessionScreenshotPath = saveSessionScreenshot(
+            sessionCaptureDirectory, captureId,
+            CaptureService::encodeJpegBase64(savedImage, settings.screenshotMaxEdge, 85));
         OllamaReply reply;
         try {
             reply = m_ollamaService.generateFromImage(settings, initial, memories, detectorContext);
@@ -415,6 +503,9 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
         };
     } catch (const std::exception &error) {
         const QString message = shortError(error);
+        if (sessionScreenshotPath.isEmpty() && !initial.isEmpty()) {
+            sessionScreenshotPath = saveSessionScreenshot(sessionCaptureDirectory, captureId, initial);
+        }
         ChatLogService::write({captureId, settings.query, memories, {}, message, retry, thinking}, settings);
         return {
             {"오류", message, false, captureId, true},
@@ -598,6 +689,7 @@ void AppController::pollHotkeys()
         }
         const KeyboardShortcut simulationTriggerShortcut = parseShortcut(settings.simulationTriggerShortcut);
         if (latchedPress(simulationTriggerShortcut, m_simulationTriggerArmed)) {
+            m_inputSimulation.configureBackend(settings.simulationInputBackend, settings.simulationRicochetPort);
             m_inputSimulation.start(simulationTriggerShortcut);
         }
         const KeyboardShortcut detectorToggleShortcut = parseShortcut(settings.detectorToggleShortcut);
@@ -612,6 +704,86 @@ void AppController::pollHotkeys()
         setSnapshot({"오류", shortError(error), false, m_snapshot.captureId, true});
     }
 }
+
+#ifdef Q_OS_WIN
+bool AppController::nativeEventFilter(const QByteArray &, void *message, qintptr *)
+{
+    const auto *nativeMessage = static_cast<MSG *>(message);
+    if (nativeMessage->message != WM_HOTKEY) {
+        return false;
+    }
+    handleHotkey(static_cast<int>(nativeMessage->wParam));
+    return true;
+}
+
+void AppController::registerHotkeys()
+{
+    unregisterHotkeys();
+    try {
+        const HudSettings settings = m_settingsStore.settings();
+        const struct { int id; KeyboardShortcut shortcut; } shortcuts[] = {
+            {CaptureHotkeyId, parseShortcut(settings.triggerShortcut)},
+            {ExitHotkeyId, parseShortcut(settings.exitShortcut)},
+            {ClearHotkeyId, parseShortcut(settings.clearShortcut)},
+            {SimulationStartHotkeyId, parseShortcut(settings.simulationTriggerShortcut)},
+            {SimulationStopHotkeyId, parseShortcut(settings.simulationStopShortcut)},
+            {DetectorToggleHotkeyId, parseShortcut(settings.detectorToggleShortcut)},
+            {LiveDetectionToggleHotkeyId, parseShortcut(settings.liveDetectionToggleShortcut)},
+            {EmergencyExitHotkeyId, parseShortcut(QStringLiteral("Ctrl+`"))},
+        };
+        for (const auto &entry : shortcuts) {
+            if (!registerGlobalHotkey(entry.id, entry.shortcut)) {
+                qWarning() << "Global shortcut unavailable:" << entry.shortcut.display();
+            }
+        }
+    } catch (const std::exception &error) {
+        qWarning() << "Could not register global shortcuts:" << error.what();
+    }
+}
+
+void AppController::unregisterHotkeys() const
+{
+    for (int id = CaptureHotkeyId; id <= EmergencyExitHotkeyId; ++id) {
+        UnregisterHotKey(nullptr, id);
+    }
+}
+
+void AppController::handleHotkey(int id)
+{
+    if (id == EmergencyExitHotkeyId || id == ExitHotkeyId) {
+        stopHud();
+        return;
+    }
+    if (!m_hudRunning) {
+        return;
+    }
+    switch (id) {
+    case CaptureHotkeyId:
+        if (!m_snapshot.active) captureOnce();
+        break;
+    case ClearHotkeyId:
+        if (!m_snapshot.active) toggleHudCollapsed();
+        break;
+    case SimulationStartHotkeyId: {
+        const HudSettings settings = m_settingsStore.settings();
+        m_inputSimulation.configureBackend(settings.simulationInputBackend, settings.simulationRicochetPort);
+        m_inputSimulation.start(parseShortcut(settings.simulationTriggerShortcut));
+        break;
+    }
+    case SimulationStopHotkeyId:
+        if (m_inputSimulation.running()) m_inputSimulation.stop(QStringLiteral("긴급 중지"));
+        break;
+    case DetectorToggleHotkeyId:
+        toggleDetectorEnabled();
+        break;
+    case LiveDetectionToggleHotkeyId:
+        toggleLiveDetection();
+        break;
+    default:
+        break;
+    }
+}
+#endif
 
 void AppController::rememberAnswer(const QString &answer, const QString &imageB64, const HudSettings &settings)
 {

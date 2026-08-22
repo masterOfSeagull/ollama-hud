@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSerialPort>
 #include <QTextStream>
 
 #include <algorithm>
@@ -78,6 +79,99 @@ public:
     }
 };
 
+class RicochetInputBackend final : public InputSimulationBackend
+{
+public:
+    explicit RicochetInputBackend(QString portName)
+        : m_portName(std::move(portName))
+    {
+    }
+
+    bool prepare(QString *error) override
+    {
+#ifdef Q_OS_WIN
+        if (m_port.isOpen() && m_port.portName().compare(m_portName, Qt::CaseInsensitive) == 0) {
+            return ping(error);
+        }
+        m_port.close();
+        m_port.setPortName(m_portName);
+        m_port.setBaudRate(QSerialPort::Baud115200);
+        m_port.setDataBits(QSerialPort::Data8);
+        m_port.setParity(QSerialPort::NoParity);
+        m_port.setStopBits(QSerialPort::OneStop);
+        m_port.setFlowControl(QSerialPort::NoFlowControl);
+        if (!m_port.open(QIODevice::ReadWrite)) {
+            *error = QStringLiteral("Could not open Ricochet on %1: %2").arg(m_portName, m_port.errorString());
+            return false;
+        }
+        m_port.setDataTerminalReady(true);
+        return ping(error);
+#else
+        *error = QStringLiteral("The Ricochet keyboard backend is Windows-only");
+        return false;
+#endif
+    }
+
+    bool sendKey(int virtualKey, bool pressed) override
+    {
+        const QString key = commandKey(virtualKey);
+        if (key.isEmpty() || !m_port.isOpen()) {
+            return false;
+        }
+        const QByteArray command = QStringLiteral("%1 %2\n").arg(pressed ? "KD" : "KU", key).toUtf8();
+        return m_port.write(command) == command.size() && m_port.waitForBytesWritten(250);
+    }
+
+    void releaseAll() override
+    {
+        if (!m_port.isOpen()) {
+            return;
+        }
+        const QByteArray command("RELEASE_ALL\n");
+        m_port.write(command);
+        m_port.waitForBytesWritten(250);
+    }
+
+private:
+    static QString commandKey(int virtualKey)
+    {
+        switch (virtualKey) {
+        case vkLeft: return QStringLiteral("LEFT");
+        case vkRight: return QStringLiteral("RIGHT");
+        case vkUp: return QStringLiteral("UP");
+        case vkF: return QStringLiteral("F");
+        case vkLeftShift: return QStringLiteral("LSHIFT");
+        default: return {};
+        }
+    }
+
+    bool ping(QString *error)
+    {
+        m_port.clear(QSerialPort::AllDirections);
+        const QByteArray command("PING\n");
+        if (m_port.write(command) != command.size() || !m_port.waitForBytesWritten(250)) {
+            *error = QStringLiteral("Could not write Ricochet handshake to %1").arg(m_portName);
+            return false;
+        }
+        QByteArray response;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 800) {
+            if (m_port.waitForReadyRead(100)) {
+                response += m_port.readAll();
+                if (response.contains("PONG")) {
+                    return true;
+                }
+            }
+        }
+        *error = QStringLiteral("Ricochet on %1 did not answer PING (flash the current Ricochet firmware and check the COM port)").arg(m_portName);
+        return false;
+    }
+
+    QString m_portName;
+    QSerialPort m_port;
+};
+
 class NativeInputRandom final : public InputSimulationRandom
 {
 public:
@@ -132,10 +226,31 @@ InputSimulationService::~InputSimulationService()
 bool InputSimulationService::running() const { return m_running; }
 QString InputSimulationService::status() const { return m_status; }
 
+void InputSimulationService::configureBackend(const QString &backend, const QString &ricochetPort)
+{
+    const QString selected = backend.trimmed().toLower();
+    if (m_running || (selected == m_backendName && ricochetPort.trimmed() == m_ricochetPort)) {
+        return;
+    }
+    m_backendName = selected;
+    m_ricochetPort = ricochetPort.trimmed();
+    if (selected == QStringLiteral("ricochet")) {
+        m_backend = std::make_unique<RicochetInputBackend>(m_ricochetPort);
+    } else {
+        m_backend = std::make_unique<NativeInputBackend>();
+    }
+}
+
 void InputSimulationService::start(const KeyboardShortcut &activationShortcut)
 {
     if (m_running) {
         log(QStringLiteral("ignored trigger while active"));
+        return;
+    }
+    QString backendError;
+    if (!m_backend->prepare(&backendError)) {
+        setStatus(QStringLiteral("Input backend unavailable: %1").arg(backendError));
+        log(QStringLiteral("input backend unavailable: %1").arg(backendError));
         return;
     }
     m_testClock = false;
@@ -388,6 +503,7 @@ void InputSimulationService::releaseAll()
             log(QStringLiteral("Input injection failed while releasing virtual key %1 during cleanup").arg(key));
         }
     }
+    m_backend->releaseAll();
 }
 
 void InputSimulationService::completeIfDone()

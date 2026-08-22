@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network Concurrent)
+find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Quick QuickControls2 Network Concurrent SerialPort)
 get_filename_component(QT_BIN_DIR "${Qt6_DIR}/../../../bin" ABSOLUTE)
 
 qt_standard_project_setup(REQUIRES 6.9)
@@ -80,6 +80,7 @@ target_link_libraries(OllamaHud PRIVATE
     Qt6::QuickControls2
     Qt6::Network
     Qt6::Concurrent
+    Qt6::SerialPort
 )
 
 if(WIN32)
@@ -132,7 +133,7 @@ endif()
 
 if(OLLAMA_HUD_BUILD_TESTS)
     enable_testing()
-    find_package(Qt6 6.9 REQUIRED COMPONENTS Test Qml QuickTest)
+    find_package(Qt6 6.9 REQUIRED COMPONENTS Test Qml QuickTest SerialPort)
 
     qt_add_executable(ollama_hud_native_tests
         native/tests/native_tests.cpp
@@ -167,6 +168,7 @@ if(OLLAMA_HUD_BUILD_TESTS)
         Qt6::QuickControls2
         Qt6::Network
         Qt6::Concurrent
+        Qt6::SerialPort
         Qt6::Test
         Qt6::Qml
     )

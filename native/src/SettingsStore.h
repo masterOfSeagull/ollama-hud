@@ -13,6 +13,8 @@ struct HudSettings
     QString clearShortcut = "Alt+2";
     QString simulationTriggerShortcut = "Alt+3";
     QString simulationStopShortcut = "Alt+4";
+    QString simulationInputBackend = "ricochet";
+    QString simulationRicochetPort = "COM3";
     QString detectorToggleShortcut = "Alt+5";
     QString liveDetectionToggleShortcut = "Alt+6";
     int screenshotMaxEdge = 1280;
@@ -45,6 +47,8 @@ class SettingsStore : public QObject
     Q_PROPERTY(QString clearShortcut READ clearShortcut WRITE setClearShortcut NOTIFY settingsChanged)
     Q_PROPERTY(QString simulationTriggerShortcut READ simulationTriggerShortcut WRITE setSimulationTriggerShortcut NOTIFY settingsChanged)
     Q_PROPERTY(QString simulationStopShortcut READ simulationStopShortcut WRITE setSimulationStopShortcut NOTIFY settingsChanged)
+    Q_PROPERTY(QString simulationInputBackend READ simulationInputBackend WRITE setSimulationInputBackend NOTIFY settingsChanged)
+    Q_PROPERTY(QString simulationRicochetPort READ simulationRicochetPort WRITE setSimulationRicochetPort NOTIFY settingsChanged)
     Q_PROPERTY(QString detectorToggleShortcut READ detectorToggleShortcut WRITE setDetectorToggleShortcut NOTIFY settingsChanged)
     Q_PROPERTY(QString liveDetectionToggleShortcut READ liveDetectionToggleShortcut WRITE setLiveDetectionToggleShortcut NOTIFY settingsChanged)
     Q_PROPERTY(int screenshotMaxEdge READ screenshotMaxEdge WRITE setScreenshotMaxEdge NOTIFY settingsChanged)
@@ -102,6 +106,10 @@ public:
     void setSimulationTriggerShortcut(const QString &value);
     QString simulationStopShortcut() const;
     void setSimulationStopShortcut(const QString &value);
+    QString simulationInputBackend() const;
+    void setSimulationInputBackend(const QString &value);
+    QString simulationRicochetPort() const;
+    void setSimulationRicochetPort(const QString &value);
     QString detectorToggleShortcut() const;
     void setDetectorToggleShortcut(const QString &value);
     QString liveDetectionToggleShortcut() const;

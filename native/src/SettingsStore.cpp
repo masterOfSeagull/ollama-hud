@@ -281,6 +281,8 @@ HudSettings SettingsStore::loadFromPath(const QString &path)
     settings.clearShortcut = stringValue(data, "clear_shortcut", settings.clearShortcut);
     settings.simulationTriggerShortcut = stringValue(data, "simulation_trigger_shortcut", settings.simulationTriggerShortcut);
     settings.simulationStopShortcut = stringValue(data, "simulation_stop_shortcut", settings.simulationStopShortcut);
+    settings.simulationInputBackend = stringValue(data, "simulation_input_backend", settings.simulationInputBackend);
+    settings.simulationRicochetPort = stringValue(data, "simulation_ricochet_port", settings.simulationRicochetPort);
     settings.detectorToggleShortcut = stringValue(data, "detector_toggle_shortcut", settings.detectorToggleShortcut);
     settings.liveDetectionToggleShortcut = stringValue(data, "live_detection_toggle_shortcut", settings.liveDetectionToggleShortcut);
     settings.screenshotMaxEdge = std::max(64, intValue(data, "screenshot_max_edge", settings.screenshotMaxEdge));
@@ -318,6 +320,8 @@ void SettingsStore::saveToPath(const HudSettings &settings, const QString &path)
     out << "clear_shortcut: " << quoteYaml(settings.clearShortcut) << "\n";
     out << "simulation_trigger_shortcut: " << quoteYaml(settings.simulationTriggerShortcut) << "\n";
     out << "simulation_stop_shortcut: " << quoteYaml(settings.simulationStopShortcut) << "\n";
+    out << "simulation_input_backend: " << quoteYaml(settings.simulationInputBackend) << "\n";
+    out << "simulation_ricochet_port: " << quoteYaml(settings.simulationRicochetPort) << "\n";
     out << "detector_toggle_shortcut: " << quoteYaml(settings.detectorToggleShortcut) << "\n";
     out << "live_detection_toggle_shortcut: " << quoteYaml(settings.liveDetectionToggleShortcut) << "\n";
     out << "screenshot_max_edge: " << settings.screenshotMaxEdge << "\n";
@@ -345,6 +349,12 @@ void SettingsStore::validate(const HudSettings &settings)
     parseShortcut(settings.triggerShortcut);
     parseShortcut(settings.exitShortcut);
     parseShortcut(settings.clearShortcut);
+    if (settings.simulationInputBackend != "ricochet" && settings.simulationInputBackend != "sendinput") {
+        throw std::invalid_argument("simulation_input_backend must be ricochet or sendinput");
+    }
+    if (settings.simulationInputBackend == "ricochet" && settings.simulationRicochetPort.trimmed().isEmpty()) {
+        throw std::invalid_argument("simulation_ricochet_port is required for the ricochet backend");
+    }
     const QStringList shortcuts = {
         parseShortcut(settings.triggerShortcut).display(),
         parseShortcut(settings.exitShortcut).display(),
@@ -491,6 +501,10 @@ QString SettingsStore::simulationTriggerShortcut() const { return m_settings.sim
 void SettingsStore::setSimulationTriggerShortcut(const QString &value) { m_settings.simulationTriggerShortcut = value; emit settingsChanged(); }
 QString SettingsStore::simulationStopShortcut() const { return m_settings.simulationStopShortcut; }
 void SettingsStore::setSimulationStopShortcut(const QString &value) { m_settings.simulationStopShortcut = value; emit settingsChanged(); }
+QString SettingsStore::simulationInputBackend() const { return m_settings.simulationInputBackend; }
+void SettingsStore::setSimulationInputBackend(const QString &value) { m_settings.simulationInputBackend = value.trimmed().toLower(); emit settingsChanged(); }
+QString SettingsStore::simulationRicochetPort() const { return m_settings.simulationRicochetPort; }
+void SettingsStore::setSimulationRicochetPort(const QString &value) { m_settings.simulationRicochetPort = value.trimmed(); emit settingsChanged(); }
 QString SettingsStore::detectorToggleShortcut() const { return m_settings.detectorToggleShortcut; }
 void SettingsStore::setDetectorToggleShortcut(const QString &value) { m_settings.detectorToggleShortcut = value; emit settingsChanged(); }
 QString SettingsStore::liveDetectionToggleShortcut() const { return m_settings.liveDetectionToggleShortcut; }

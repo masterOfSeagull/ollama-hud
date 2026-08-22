@@ -8,6 +8,7 @@
 #include "Shortcut.h"
 
 #include <QFutureWatcher>
+#include <QAbstractNativeEventFilter>
 #include <QImage>
 #include <QJsonObject>
 #include <QObject>
@@ -38,7 +39,7 @@ struct CaptureRequestResult
     QString koreanTranslation;
 };
 
-class AppController : public QObject
+class AppController : public QObject, public QAbstractNativeEventFilter
 {
     Q_OBJECT
     Q_PROPERTY(SettingsStore *settingsStore READ settingsStore CONSTANT)
@@ -96,6 +97,10 @@ public:
     Q_INVOKABLE bool openLogFolder();
     Q_INVOKABLE bool openSessionScreenshot(const QString &path);
 
+#ifdef Q_OS_WIN
+    bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
+
 signals:
     void snapshotChanged();
     void hudCollapsedChanged();
@@ -117,6 +122,11 @@ private:
     void ensureOverlay();
     void closeOverlay();
     void pollHotkeys();
+#ifdef Q_OS_WIN
+    void registerHotkeys();
+    void unregisterHotkeys() const;
+    void handleHotkey(int id);
+#endif
     void rememberAnswer(const QString &answer, const QString &imageB64, const HudSettings &settings);
     QString shortError(const std::exception &error) const;
 

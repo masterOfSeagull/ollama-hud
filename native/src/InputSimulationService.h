@@ -13,7 +13,9 @@ class InputSimulationBackend
 {
 public:
     virtual ~InputSimulationBackend() = default;
+    virtual bool prepare(QString *error) { Q_UNUSED(error); return true; }
     virtual bool sendKey(int virtualKey, bool pressed) = 0;
+    virtual void releaseAll() {}
 };
 
 class InputSimulationRandom
@@ -39,6 +41,7 @@ public:
 
     bool running() const;
     QString status() const;
+    void configureBackend(const QString &backend, const QString &ricochetPort);
     void start(const KeyboardShortcut &activationShortcut);
     void stop(const QString &reason = QStringLiteral("중지됨"));
 
@@ -92,4 +95,6 @@ private:
     bool m_upDone = false;
     bool m_fDone = false;
     bool m_shiftDone = false;
+    QString m_backendName = QStringLiteral("sendinput");
+    QString m_ricochetPort;
 };

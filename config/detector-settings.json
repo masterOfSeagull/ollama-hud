@@ -9,9 +9,23 @@
     "positive_guide_folder": "C:/projects/owlv2-visual-detector/assets/guides/positive",
     "targets": [
         {
-            "name": "입구",
+            "name": "콜드아이",
             "prompts": [
-                "white glowing bright entrance:0.28"
+                "white lizard monster:0.2"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "로프",
+            "prompts": [
+                "thin light brown vertical rope:0.2"
+            ],
+            "type": "text"
+        },
+        {
+            "name": "캐릭터",
+            "prompts": [
+                "character name 세방시시:0.2"
             ],
             "type": "text"
         }
