@@ -228,11 +228,22 @@ void NativeTests::detectorSettingsAndContext()
 {
     DetectorSettings settings;
     QVERIFY(settings.enabled == false);
+    QCOMPARE(settings.maxDetectionsPerTarget, 5);
+    QCOMPARE(settings.ollamaContextDetectionLimit, 8);
     QVERIFY(QJsonDocument::fromJson(settings.targetsJson.toUtf8()).isArray());
     const QJsonObject result{{"detections", QJsonArray{QJsonObject{{"target", "Entrance"}, {"matched_prompt", "portal"}, {"source", "guides"}, {"score", 0.8}, {"raw_logit", 0.8}, {"box", QJsonArray{1, 2, 3, 4}}}}}};
     const QString context = DetectorClient::summary(result);
     QVERIFY(context.contains("Entrance:portal"));
     QVERIFY(context.contains("raw logit 0.800"));
+    const QJsonArray repeatedDetections{
+        QJsonObject{{"target", "One"}, {"source", "text"}, {"score", 0.9}, {"box", QJsonArray{1, 2, 3, 4}}},
+        QJsonObject{{"target", "Two"}, {"source", "text"}, {"score", 0.8}, {"box", QJsonArray{2, 3, 4, 5}}},
+        QJsonObject{{"target", "Three"}, {"source", "text"}, {"score", 0.7}, {"box", QJsonArray{3, 4, 5, 6}}}
+    };
+    const QString limitedContext = DetectorClient::summary({{"detections", repeatedDetections}}, 2);
+    QCOMPARE(limitedContext.count("\n- "), 2);
+    QVERIFY(limitedContext.contains("Two"));
+    QVERIFY(!limitedContext.contains("Three"));
     const QJsonObject guidedDetection{{"target", "Entrance"}, {"source", "guides"}, {"guide", "C:\\guides\\Entrance\\variants\\portal.png"}};
     QCOMPARE(DetectorClient::displayLabel(guidedDetection), QString("Entrance:variants/portal.png"));
     HudSettings hud;
@@ -297,6 +308,8 @@ void NativeTests::detectorSettingsImportExport()
     DetectorSettingsStore source;
     source.setModel("snapshot-model");
     source.setTextThreshold(0.35);
+    source.setMaxDetectionsPerTarget(12);
+    source.setOllamaContextDetectionLimit(19);
     source.updateTextTarget(0, "Snapshot target", "entrance:0.3, portal:0.6");
     QVERIFY(source.saveToFile(path));
     QCOMPARE(DetectorSettingsStore().settingsFolder().toLocalFile(), QFileInfo(DetectorSettingsStore::configPath()).absolutePath());
@@ -307,7 +320,22 @@ void NativeTests::detectorSettingsImportExport()
     QVERIFY(loaded.loadFromFile(path));
     QCOMPARE(loaded.model(), QString("snapshot-model"));
     QCOMPARE(loaded.textThreshold(), 0.35);
+    QCOMPARE(loaded.maxDetectionsPerTarget(), 12);
+    QCOMPARE(loaded.ollamaContextDetectionLimit(), 19);
     QCOMPARE(loaded.targets().first().toMap().value("prompts").toString(), QString("entrance:0.3, portal:0.6"));
+
+    QFile legacy(path);
+    QVERIFY(legacy.open(QIODevice::ReadOnly));
+    QJsonObject legacySettings = QJsonDocument::fromJson(legacy.readAll()).object();
+    legacy.close();
+    legacySettings.remove("max_detections_per_target");
+    legacySettings.remove("ollama_context_detection_limit");
+    QVERIFY(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    legacy.write(QJsonDocument(legacySettings).toJson());
+    legacy.close();
+    QVERIFY(loaded.loadFromFile(path));
+    QCOMPARE(loaded.maxDetectionsPerTarget(), 5);
+    QCOMPARE(loaded.ollamaContextDetectionLimit(), 8);
 
     QFile invalid(path);
     QVERIFY(invalid.open(QIODevice::WriteOnly | QIODevice::Truncate));

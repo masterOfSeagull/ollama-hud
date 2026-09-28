@@ -4,28 +4,16 @@
     "enabled": true,
     "guide_threshold": 4,
     "live_rate": 10,
+    "max_detections_per_target": 15,
     "model": "google/owlv2-base-patch16-ensemble",
     "negative_guide_folder": "C:/projects/owlv2-visual-detector/assets/guides/negative",
+    "ollama_context_detection_limit": 8,
     "positive_guide_folder": "C:/projects/owlv2-visual-detector/assets/guides/positive",
     "targets": [
         {
-            "name": "콜드아이",
+            "name": "해적",
             "prompts": [
-                "white lizard monster:0.2"
-            ],
-            "type": "text"
-        },
-        {
-            "name": "로프",
-            "prompts": [
-                "thin light brown vertical rope:0.2"
-            ],
-            "type": "text"
-        },
-        {
-            "name": "캐릭터",
-            "prompts": [
-                "character name 세방시시:0.2"
+                "pirate monster:0.29"
             ],
             "type": "text"
         }

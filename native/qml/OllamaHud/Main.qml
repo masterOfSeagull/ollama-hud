@@ -1152,6 +1152,10 @@ ApplicationWindow {
                         OptionField { text: appController.detectorSettingsStore.textThreshold; onEditingFinished: appController.detectorSettingsStore.textThreshold = parseFloat(text) }
                         FieldLabel { text: "가이드 임계값 (원시 로짓)" }
                         OptionField { text: appController.detectorSettingsStore.guideThreshold; onEditingFinished: appController.detectorSettingsStore.guideThreshold = parseFloat(text) }
+                        FieldLabel { text: "대상별 최대 감지 수" }
+                        OptionField { integerOnly: true; text: appController.detectorSettingsStore.maxDetectionsPerTarget; onEditingFinished: appController.detectorSettingsStore.maxDetectionsPerTarget = parseInt(text) }
+                        FieldLabel { text: "Ollama 컨텍스트 최대 감지 수" }
+                        OptionField { integerOnly: true; text: appController.detectorSettingsStore.ollamaContextDetectionLimit; onEditingFinished: appController.detectorSettingsStore.ollamaContextDetectionLimit = parseInt(text) }
                         FieldLabel { text: "양성 가이드 폴더" }
                         RowLayout {
                             Layout.fillWidth: true

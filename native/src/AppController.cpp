@@ -441,7 +441,7 @@ CaptureRequestResult AppController::runCaptureRequest(const QImage &image, const
         QString detectorContext;
         if (detectorEnabled) {
             detectorResult = m_detectorClient.detect(image, detectorSettings);
-            detectorContext = DetectorClient::summary(detectorResult);
+            detectorContext = DetectorClient::summary(detectorResult, detectorSettings.ollamaContextDetectionLimit);
         }
         const QImage savedImage = detectorEnabled ? annotateDetections(image, detectorResult) : image;
         sessionScreenshotPath = saveSessionScreenshot(

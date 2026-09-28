@@ -20,7 +20,7 @@ public:
     QJsonObject stopLive();
     QJsonObject latestLive();
     static QString displayLabel(const QJsonObject &detection);
-    static QString summary(const QJsonObject &result);
+    static QString summary(const QJsonObject &result, int detectionLimit = 8);
 private:
     QJsonObject requestFor(const DetectorSettings &settings) const;
     QJsonObject get(const QString &path) const;

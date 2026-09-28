@@ -12,6 +12,8 @@ struct DetectorSettings
     QString dtype = "auto";
     double textThreshold = 0.10;
     double guideThreshold = 0.10;
+    int maxDetectionsPerTarget = 5;
+    int ollamaContextDetectionLimit = 8;
     QString targetsJson = R"([{"name":"Entrance","prompts":["entrance","portal","exit","door"]}])";
     QString positiveGuideFolder = "C:/projects/owlv2-visual-detector/assets/guides/positive";
     QString negativeGuideFolder = "C:/projects/owlv2-visual-detector/assets/guides/negative";
@@ -27,6 +29,8 @@ class DetectorSettingsStore : public QObject
     Q_PROPERTY(QString dtype READ dtype WRITE setDtype NOTIFY changed)
     Q_PROPERTY(double textThreshold READ textThreshold WRITE setTextThreshold NOTIFY changed)
     Q_PROPERTY(double guideThreshold READ guideThreshold WRITE setGuideThreshold NOTIFY changed)
+    Q_PROPERTY(int maxDetectionsPerTarget READ maxDetectionsPerTarget WRITE setMaxDetectionsPerTarget NOTIFY changed)
+    Q_PROPERTY(int ollamaContextDetectionLimit READ ollamaContextDetectionLimit WRITE setOllamaContextDetectionLimit NOTIFY changed)
     Q_PROPERTY(QString targetsJson READ targetsJson WRITE setTargetsJson NOTIFY changed)
     Q_PROPERTY(QVariantList targets READ targets NOTIFY changed)
     Q_PROPERTY(QStringList defaultGuideTargetNames READ defaultGuideTargetNames NOTIFY changed)
@@ -51,6 +55,8 @@ public:
     QString dtype() const; void setDtype(const QString &value);
     double textThreshold() const; void setTextThreshold(double value);
     double guideThreshold() const; void setGuideThreshold(double value);
+    int maxDetectionsPerTarget() const; void setMaxDetectionsPerTarget(int value);
+    int ollamaContextDetectionLimit() const; void setOllamaContextDetectionLimit(int value);
     QString targetsJson() const; void setTargetsJson(const QString &value);
     QVariantList targets() const;
     QStringList defaultGuideTargetNames() const;

@@ -29,7 +29,7 @@ bool containsGuideImage(const QString &folder) {
     return it.hasNext();
 }
 QJsonObject settingsObject(const DetectorSettings &settings) {
-    return {{"enabled", settings.enabled}, {"model", settings.model}, {"device", settings.device}, {"dtype", settings.dtype}, {"text_threshold", settings.textThreshold}, {"guide_threshold", settings.guideThreshold}, {"targets", QJsonDocument::fromJson(settings.targetsJson.toUtf8()).array()}, {"positive_guide_folder", settings.positiveGuideFolder}, {"negative_guide_folder", settings.negativeGuideFolder}, {"live_rate", settings.liveRate}};
+    return {{"enabled", settings.enabled}, {"model", settings.model}, {"device", settings.device}, {"dtype", settings.dtype}, {"text_threshold", settings.textThreshold}, {"guide_threshold", settings.guideThreshold}, {"max_detections_per_target", settings.maxDetectionsPerTarget}, {"ollama_context_detection_limit", settings.ollamaContextDetectionLimit}, {"targets", QJsonDocument::fromJson(settings.targetsJson.toUtf8()).array()}, {"positive_guide_folder", settings.positiveGuideFolder}, {"negative_guide_folder", settings.negativeGuideFolder}, {"live_rate", settings.liveRate}};
 }
 }
 
@@ -71,6 +71,8 @@ void DetectorSettingsStore::validate(const DetectorSettings &s) {
             }
         }
     }
+    if (s.maxDetectionsPerTarget < 1 || s.maxDetectionsPerTarget > 1000) throw std::invalid_argument("대상별 최대 감지 수는 1~1000이어야 합니다.");
+    if (s.ollamaContextDetectionLimit < 1 || s.ollamaContextDetectionLimit > 1000) throw std::invalid_argument("Ollama 컨텍스트 최대 감지 수는 1~1000이어야 합니다.");
     if (s.liveRate < .2 || s.liveRate > 30) throw std::invalid_argument("실시간 감지 빈도는 0.2~30 Hz여야 합니다.");
 }
 bool DetectorSettingsStore::load() {
@@ -103,7 +105,7 @@ bool DetectorSettingsStore::loadFromFile(const QString &path) {
         const QJsonObject object = document.object();
         if (object.contains("targets") && !object.value("targets").isArray()) throw std::invalid_argument("감지기 설정의 대상은 배열이어야 합니다.");
         DetectorSettings loaded;
-        loaded.enabled = object.value("enabled").toBool(loaded.enabled); loaded.model = object.value("model").toString(loaded.model); loaded.device = object.value("device").toString(loaded.device); loaded.dtype = object.value("dtype").toString(loaded.dtype); loaded.textThreshold = object.value("text_threshold").toDouble(loaded.textThreshold); loaded.guideThreshold = object.value("guide_threshold").toDouble(loaded.guideThreshold); if (object.contains("targets")) loaded.targetsJson = QString::fromUtf8(QJsonDocument(object.value("targets").toArray()).toJson(QJsonDocument::Compact)); loaded.positiveGuideFolder = object.value("positive_guide_folder").toString(loaded.positiveGuideFolder); loaded.negativeGuideFolder = object.value("negative_guide_folder").toString(loaded.negativeGuideFolder); loaded.liveRate = object.value("live_rate").toDouble(loaded.liveRate);
+        loaded.enabled = object.value("enabled").toBool(loaded.enabled); loaded.model = object.value("model").toString(loaded.model); loaded.device = object.value("device").toString(loaded.device); loaded.dtype = object.value("dtype").toString(loaded.dtype); loaded.textThreshold = object.value("text_threshold").toDouble(loaded.textThreshold); loaded.guideThreshold = object.value("guide_threshold").toDouble(loaded.guideThreshold); loaded.maxDetectionsPerTarget = object.value("max_detections_per_target").toInt(loaded.maxDetectionsPerTarget); loaded.ollamaContextDetectionLimit = object.value("ollama_context_detection_limit").toInt(loaded.ollamaContextDetectionLimit); if (object.contains("targets")) loaded.targetsJson = QString::fromUtf8(QJsonDocument(object.value("targets").toArray()).toJson(QJsonDocument::Compact)); loaded.positiveGuideFolder = object.value("positive_guide_folder").toString(loaded.positiveGuideFolder); loaded.negativeGuideFolder = object.value("negative_guide_folder").toString(loaded.negativeGuideFolder); loaded.liveRate = object.value("live_rate").toDouble(loaded.liveRate);
         validate(loaded);
         m_settings = loaded;
         setLastError({});
@@ -118,6 +120,8 @@ QString DetectorSettingsStore::device() const{return m_settings.device;} void De
 QString DetectorSettingsStore::dtype() const{return m_settings.dtype;} void DetectorSettingsStore::setDtype(const QString &v){m_settings.dtype=v;emit changed();}
 double DetectorSettingsStore::textThreshold() const{return m_settings.textThreshold;} void DetectorSettingsStore::setTextThreshold(double v){m_settings.textThreshold=v;emit changed();}
 double DetectorSettingsStore::guideThreshold() const{return m_settings.guideThreshold;} void DetectorSettingsStore::setGuideThreshold(double v){m_settings.guideThreshold=v;emit changed();}
+int DetectorSettingsStore::maxDetectionsPerTarget() const{return m_settings.maxDetectionsPerTarget;} void DetectorSettingsStore::setMaxDetectionsPerTarget(int v){m_settings.maxDetectionsPerTarget=v;emit changed();}
+int DetectorSettingsStore::ollamaContextDetectionLimit() const{return m_settings.ollamaContextDetectionLimit;} void DetectorSettingsStore::setOllamaContextDetectionLimit(int v){m_settings.ollamaContextDetectionLimit=v;emit changed();}
 QString DetectorSettingsStore::targetsJson() const{return m_settings.targetsJson;} void DetectorSettingsStore::setTargetsJson(const QString &v){m_settings.targetsJson=v;emit changed();}
 QVariantList DetectorSettingsStore::targets() const {
     QVariantList result;
